@@ -76,6 +76,7 @@ class NinetyNinePlayer(Player):
 
     hand: list[Card] = field(default_factory=list)
     tokens: int = DEFAULT_TOKENS
+    draw_timeout_ticks: int = 0  # Per-player manual-draw countdown
 
 
 @dataclass
@@ -154,10 +155,6 @@ class NinetyNineGame(Game):
     pending_choice: str | None = None  # "ace" or "ten"
     pending_card_index: int = -1
 
-    # Manual draw state (when autodraw is off)
-    pending_draw_player_id: str | None = None
-    draw_timeout_ticks: int = 0
-
     @classmethod
     def get_name(cls) -> str:
         return "Ninety Nine"
@@ -205,15 +202,6 @@ class NinetyNineGame(Game):
     def is_standard_rules(self) -> bool:
         """Check if using standard rules (52-card deck)."""
         return self.options.rules_variant == "standard"
-
-    @property
-    def pending_draw_player(self) -> NinetyNinePlayer | None:
-        """Get the player who needs to draw (manual draw mode)."""
-        if self.pending_draw_player_id:
-            player = self.get_player_by_id(self.pending_draw_player_id)
-            if isinstance(player, NinetyNinePlayer):
-                return player
-        return None
 
     def on_player_skipped(self, player: Player) -> None:
         """Announce when a player is skipped."""
@@ -502,7 +490,7 @@ class NinetyNineGame(Game):
         is_current = self.current_player == player
         is_playing = self.status == "playing"
         has_pending_choice = self.pending_choice is not None
-        needs_to_draw = self.pending_draw_player_id == player.id
+        needs_to_draw = player.draw_timeout_ticks > 0
 
         # Remove old dynamic actions
         turn_set.remove_by_prefix("card_slot_")
@@ -645,9 +633,6 @@ class NinetyNineGame(Game):
             return "action-not-available"
         if self.pending_choice is not None:
             return "ninetynine-choose-first"
-        nn_player: NinetyNinePlayer = player  # type: ignore
-        if self.pending_draw_player_id == nn_player.id:
-            return "ninetynine-draw-first"
         return None
 
     def _is_card_slot_hidden(self, player: Player) -> Visibility:
@@ -816,11 +801,8 @@ class NinetyNineGame(Game):
             return "action-not-available"
         if self.current_player != player:
             return "action-not-your-turn"
-        nn_player: NinetyNinePlayer = player  # type: ignore
         if self.pending_choice is not None:
             return "ninetynine-choose-first"
-        if self.pending_draw_player_id == nn_player.id:
-            return "ninetynine-draw-first"
         return None
 
     def _pre_input_check_pending_choice(self, player: Player, action_id: str) -> str | None:
@@ -966,8 +948,6 @@ class NinetyNineGame(Game):
         self.turn_direction = 1
         self.turn_skip_count = 0
         self.pending_choice = None
-        self.pending_draw_player_id = None
-        self.draw_timeout_ticks = 0
 
         # Build and shuffle deck based on variant
         if self.is_standard_rules:
@@ -984,10 +964,12 @@ class NinetyNineGame(Game):
         ]
 
         # Clear every hand first so eliminated players cannot keep stale cards
-        # or stale touch-menu entries from earlier rounds.
+        # or stale touch-menu entries from earlier rounds, and close any draw
+        # window left open from the previous round.
         for player in self.players:
             if isinstance(player, NinetyNinePlayer):
                 player.hand = []
+                player.draw_timeout_ticks = 0
 
         # Deal cards to alive players
         for player in self.alive_players:
@@ -1016,8 +998,9 @@ class NinetyNineGame(Game):
 
         self.pending_choice = None
         self.pending_card_index = -1
-        self.pending_draw_player_id = None
-        self.draw_timeout_ticks = 0
+        for player in self.players:
+            if isinstance(player, NinetyNinePlayer):
+                player.draw_timeout_ticks = 0
         self.cancel_sequences_by_tag(ROUND_TRANSITION_TAG)
         self.broadcast_l(
             "ninetynine-next-round-wait",
@@ -1369,10 +1352,8 @@ class NinetyNineGame(Game):
         # A milestone *pass* penalty on this very play can cost the player their
         # last token and eliminate them while the round still continues (e.g.
         # crossing 66 leaves the count at 67 but does not end the round). Such a
-        # player must never be dealt a replacement card, and — fatally in manual
-        # draw — must never become the pending-draw player: a dead player's
-        # _action_draw_card no-ops, so the draw never resolves, the turn never
-        # advances, and the game wedges forever. Just move past them.
+        # player must never be dealt a replacement card, so move straight past
+        # them to the next living player.
         if not self._is_alive_player(player):
             self._update_all_turn_actions()
             self._advance_turn()
@@ -1387,15 +1368,20 @@ class NinetyNineGame(Game):
             self._update_all_turn_actions()
             self._advance_turn()
         else:
-            # Manual draw mode
-            self.pending_draw_player_id = player.id
-            self.draw_timeout_ticks = DRAW_TIMEOUT_TICKS
-            # DO NOT ADVANCE TURN YET - wait for draw
+            # Manual draw mode: open a private draw window and pass the turn
+            # immediately so play keeps flowing. The player tops their hand back
+            # up during the next players' turns; bots draw after a short delay,
+            # humans get the full window and simply forfeit the top-up if they
+            # let it lapse (serviced in on_tick).
+            if player.is_bot:
+                player.draw_timeout_ticks = random.randint(15, 30)
+            else:
+                player.draw_timeout_ticks = DRAW_TIMEOUT_TICKS
+                user = self.get_user(player)
+                if user:
+                    user.speak_l("ninetynine-draw-prompt", buffer="game")
             self._update_all_turn_actions()
-            self.rebuild_all_menus()
-            user = self.get_user(player)
-            if user:
-                user.speak_l("ninetynine-draw-prompt", buffer="game")
+            self._advance_turn()
 
     def _check_milestones(
         self,
@@ -1565,9 +1551,7 @@ class NinetyNineGame(Game):
         if player.id in self.alive_player_ids:
             self.alive_player_ids.remove(player.id)
         player.hand = []
-        if self.pending_draw_player_id == player.id:
-            self.pending_draw_player_id = None
-            self.draw_timeout_ticks = 0
+        player.draw_timeout_ticks = 0
         if self.current_player == player:
             self.pending_choice = None
             self.pending_card_index = -1
@@ -1671,7 +1655,10 @@ class NinetyNineGame(Game):
         if self._is_round_transition_active() or not self._is_alive_player(player):
             return
 
-        if self.pending_draw_player_id != player.id:
+        # The draw window is open only while draw_timeout_ticks > 0. The turn has
+        # already moved on, so drawing tops the hand back up without touching the
+        # turn order.
+        if player.draw_timeout_ticks <= 0:
             return
 
         drawn = self._draw_card()
@@ -1685,20 +1672,18 @@ class NinetyNineGame(Game):
                 user = self.get_user(p)
                 if not user:
                     continue
-                
-                # Only the drawer sees the card name if needed, but here we announce the draw action
-                # For "you draw", we show the card. For others, we just say "player draws a card".
+
                 if p == player:
                     c_name = card_name_with_article(drawn, user.locale)
                     user.speak_l("ninetynine-you-draw", buffer="game", card=c_name)
                 else:
                     user.speak_l("ninetynine-player-draws", buffer="game", player=player.name)
 
-        self.pending_draw_player_id = None
-        self.draw_timeout_ticks = 0
-        self._advance_turn()  # Now we advance the turn
+        player.draw_timeout_ticks = 0
+        # Focus-preserving refresh: the drawer is a background player and the
+        # current player is mid-turn — a full rebuild would yank their cursor.
         self._update_all_turn_actions()
-        self.rebuild_all_menus()
+        self.update_all_menus()
 
     def _action_check_count(self, player: Player, action_id: str) -> None:
         """Announce the current count."""
@@ -1732,28 +1717,36 @@ class NinetyNineGame(Game):
         if self.is_sequence_bot_paused():
             return
 
-        # Handle pending draw
-        if self.pending_draw_player_id:
-            draw_player = self.pending_draw_player
-            if draw_player:
-                if draw_player.is_bot:
-                    if draw_player.bot_think_ticks > 0:
-                        draw_player.bot_think_ticks -= 1
-                    else:
-                        self._action_draw_card(draw_player, "draw_card")
+        # Service per-player manual-draw windows. The turn has already advanced,
+        # so these resolve in the background while play continues; several can be
+        # open at once.
+        for player in list(self.alive_players):
+            ticks = player.draw_timeout_ticks
+            if ticks <= 0:
+                continue
+
+            if player.is_bot:
+                # Bot draws the moment its short delay elapses, while the window
+                # is still open so the draw isn't rejected as stale.
+                if ticks <= 1:
+                    self._action_draw_card(player, "draw_card")
+                    if not self.game_active:
                         return
+                else:
+                    player.draw_timeout_ticks = ticks - 1
+                continue
 
-                if self.draw_timeout_ticks > 0:
-                    self.draw_timeout_ticks -= 1
-                    if self.draw_timeout_ticks <= 0:
-                        self.pending_draw_player_id = None
-
-                        if len(draw_player.hand) == 0:
-                            self._player_out_of_cards(draw_player)
-                            return
-
-                        self._advance_turn()
+            player.draw_timeout_ticks = ticks - 1
+            if player.draw_timeout_ticks <= 0:
+                # Human let the window lapse: the top-up is forfeited. If that
+                # leaves them empty-handed, they are out of cards.
+                if len(player.hand) == 0:
+                    self._player_out_of_cards(player)
+                    if not self.game_active:
                         return
+                else:
+                    self._update_turn_actions(player)
+                    self.update_player_menu(player)
 
         BotHelper.on_tick(self)
 

@@ -478,8 +478,10 @@ class TestNinetyNinePlayTest:
 
         assert not game.game_active
 
-    def test_manual_draw_timeout_advances_turn(self):
-        """Manual draw timeout should not leave the game stuck on the same player."""
+    def test_manual_draw_passes_turn_immediately(self):
+        """In manual-draw mode, playing a card advances the turn at once and
+        opens a private draw window for the mover — the table never blocks on
+        the draw."""
         game = NinetyNineGame(options=NinetyNineOptions(autodraw=False))
         user1 = MockUser("Alice")
         user2 = MockUser("Bob")
@@ -488,23 +490,61 @@ class TestNinetyNinePlayTest:
 
         game.setup_keybinds()
         game.on_start()
-        game.turn_index = game.turn_player_ids.index(player1.id)
-        game.pending_draw_player_id = player1.id
-        game.draw_timeout_ticks = 1
+        game.alive_player_ids = [player1.id, player2.id]
+        game.set_turn_players([player1, player2])
+        game.turn_index = 0
+        game.count = 50
         player1.hand = [Card(id=99, rank=5, suit=SUIT_HEARTS)]
+        game._update_turn_actions(player1)
 
-        game.on_tick()
+        game.execute_action(player1, "card_slot_1")
 
-        assert game.pending_draw_player_id is None
+        # Turn moved on at once; player1 holds an open draw window and has not
+        # yet redrawn the card they played.
         assert game.current_player == player2
+        assert player1.draw_timeout_ticks > 0
+        assert player1.hand == []
+
+    def test_manual_draw_window_lapse_forfeits_topup(self):
+        """A human who lets the draw window lapse forfeits the top-up; the turn
+        order is untouched because it advanced when they played."""
+        game = NinetyNineGame(options=NinetyNineOptions(autodraw=False))
+        user1 = MockUser("Alice")
+        user2 = MockUser("Bob")
+        player1 = game.add_player("Alice", user1)
+        player2 = game.add_player("Bob", user2)
+
+        game.setup_keybinds()
+        game.on_start()
+        game.alive_player_ids = [player1.id, player2.id]
+        game.set_turn_players([player1, player2])
+        game.turn_index = 0
+        game.count = 50
+        # Two cards so the lapse leaves a non-empty hand (no out-of-cards penalty).
+        player1.hand = [
+            Card(id=1, rank=5, suit=SUIT_HEARTS),
+            Card(id=2, rank=4, suit=SUIT_HEARTS),
+        ]
+        game._update_turn_actions(player1)
+
+        game.execute_action(player1, "card_slot_1")
+        assert game.current_player == player2
+        assert player1.draw_timeout_ticks > 0
+
+        for _ in range(DRAW_TIMEOUT_TICKS + 1):
+            game.on_tick()
+
+        assert player1.draw_timeout_ticks == 0
+        assert len(player1.hand) == 1  # forfeited the top-up
+        assert game.current_player == player2  # turn order untouched
 
     def test_milestone_elimination_does_not_wedge_manual_draw(self):
         """A player eliminated by a milestone-pass penalty on their own play must
-        not become the pending-draw player (manual draw would then hang forever).
+        not be left holding an open draw window that strands the round.
 
         Crossing 66 costs the mover a token; if it was their last, they are
         eliminated while the round continues. Three players keep the game alive
-        so the bug — installing the dead player as pending_draw — is reachable.
+        so the dead-mover path is reachable.
         """
         game = NinetyNineGame(options=NinetyNineOptions(autodraw=False))
         users = [MockUser(n) for n in ["Alice", "Bob", "Carol"]]
@@ -524,15 +564,15 @@ class TestNinetyNinePlayTest:
 
         game.execute_action(players[0], "card_slot_1")
 
-        # Eliminated, round still live, and crucially not left as pending draw.
+        # Eliminated, round still live, and crucially holding no draw window:
+        # the dead-mover guard skips the draw entirely.
         assert players[0].tokens == 0
         assert players[0].id not in game.alive_player_ids
         assert game.game_active
-        assert game.pending_draw_player_id != players[0].id
+        assert players[0].draw_timeout_ticks == 0
         # Turn has moved on to a living player who can actually act.
         assert game.current_player in players[1:]
-        # Ticking must not spin on a dead drawer: with the seat vacated the only
-        # pending draw left is None, so on_tick simply waits for the live player.
+        # Ticking must not spin on the dead seat.
         for _ in range(DRAW_TIMEOUT_TICKS + 5):
             game.on_tick()
         assert game.current_player in players[1:]
@@ -693,7 +733,6 @@ class TestNinetyNineChoiceDialogs:
         self.game.count = 50
         self.player1.hand = []
         self.player2.hand = [Card(id=999, rank=5, suit=SUIT_HEARTS)]
-        self.game.pending_draw_player_id = None
         self.game.pending_choice = None
         self.game.pending_card_index = -1
         self.game._update_all_turn_actions()

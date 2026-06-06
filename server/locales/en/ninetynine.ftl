@@ -85,7 +85,6 @@ ninetynine-rules-variant-standard = Standard
 ninetynine-rules-variant-action-cards = Action Cards
 
 ninetynine-choose-first = You need to make a choice first.
-ninetynine-draw-first = You need to draw a card first.
 ninetynine-round-transition-waiting = Waiting for the next round to start.
 ninetynine-error-too-many-cards = Too many cards needed: { $players } players × { $hand_size } cards exceeds the { $deck_size }-card deck.
 ninetynine-check-count = Check count

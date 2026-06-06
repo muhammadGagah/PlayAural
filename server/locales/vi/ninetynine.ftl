@@ -85,7 +85,6 @@ ninetynine-rules-variant-standard = Tiêu chuẩn
 ninetynine-rules-variant-action-cards = Lá Bài Hành Động
 
 ninetynine-choose-first = Bạn cần đưa ra lựa chọn trước.
-ninetynine-draw-first = Bạn cần rút bài trước.
 ninetynine-round-transition-waiting = Đang chờ vòng tiếp theo bắt đầu.
 ninetynine-error-too-many-cards = Cần chia quá nhiều bài: { $players } người chơi × { $hand_size } lá vượt quá bộ bài { $deck_size } lá.
 ninetynine-check-count = Kiểm tra tổng điểm
