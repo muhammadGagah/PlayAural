@@ -1014,7 +1014,9 @@ class BackgammonGame(Game):
             if opp_player.is_bot:
                 BotHelper.jolt_bot(opp_player, ticks=random.randint(5, 10))  # nosec B311
 
-        self.rebuild_all_menus()
+        # Use a focus-preserving update (not a full re-show) so the receiving
+        # player's grid focus doesn't jump to the first cell at turn start.
+        self.update_all_menus()
 
     # ==========================================================================
     # Doubling cube
