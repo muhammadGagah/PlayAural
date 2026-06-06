@@ -12,6 +12,7 @@ from ...game_utils.actions import Action, ActionSet, MenuInput, Visibility
 from ...game_utils.bot_helper import BotHelper
 from ...game_utils.cards import Card, Deck, card_name
 from ...game_utils.game_result import GameResult, PlayerResult
+from ...game_utils.options import IntOption, option_field
 from ...messages.localization import Localization
 from .bot import bot_think as compute_bot_think
 from ...ui.keybinds import KeybindState
@@ -232,11 +233,61 @@ BOT_DRAW_STAND_DELAY_TICKS = 40
 class TwentyOneOptions(GameOptions):
     """Survival 21 defaults for Play Palace PvP."""
 
-    starting_health: int = 10
-    base_bet: int = 1
-    starting_modifiers_per_round: int = 1
-    draw_modifier_chance_percent: int = 35
-    deck_count: int = 1
+    starting_health: int = option_field(
+        IntOption(
+            default=10,
+            min_val=1,
+            max_val=100,
+            value_key="hp",
+            label="twentyone-option-starting-health",
+            prompt="twentyone-option-enter-starting-health",
+            change_msg="twentyone-option-changed-starting-health",
+        )
+    )
+    base_bet: int = option_field(
+        IntOption(
+            default=1,
+            min_val=0,
+            max_val=50,
+            value_key="bet",
+            label="twentyone-option-base-bet",
+            prompt="twentyone-option-enter-base-bet",
+            change_msg="twentyone-option-changed-base-bet",
+        )
+    )
+    starting_modifiers_per_round: int = option_field(
+        IntOption(
+            default=1,
+            min_val=0,
+            max_val=10,
+            value_key="count",
+            label="twentyone-option-starting-change-cards",
+            prompt="twentyone-option-enter-starting-change-cards",
+            change_msg="twentyone-option-changed-starting-change-cards",
+        )
+    )
+    draw_modifier_chance_percent: int = option_field(
+        IntOption(
+            default=35,
+            min_val=0,
+            max_val=100,
+            value_key="percent",
+            label="twentyone-option-draw-change-chance",
+            prompt="twentyone-option-enter-draw-change-chance",
+            change_msg="twentyone-option-changed-draw-change-chance",
+        )
+    )
+    deck_count: int = option_field(
+        IntOption(
+            default=1,
+            min_val=1,
+            max_val=10,
+            value_key="count",
+            label="twentyone-option-deck-count",
+            prompt="twentyone-option-enter-deck-count",
+            change_msg="twentyone-option-changed-deck-count",
+        )
+    )
     next_round_wait_ticks: int = BETWEEN_ROUND_WAIT_TICKS
 
 
@@ -257,6 +308,8 @@ class TwentyOnePlayer(Player):
 @register_game
 class TwentyOneGame(ActionGuardMixin, Game):
     """Survival 21 ruleset with tactical modifier cards."""
+
+    score_unit_key = "game-score-unit-health"
 
     players: list[TwentyOnePlayer] = field(default_factory=list)
     options: TwentyOneOptions = field(default_factory=TwentyOneOptions)
@@ -337,10 +390,39 @@ class TwentyOneGame(ActionGuardMixin, Game):
     def _is_check_hidden(self, player: Player) -> Visibility:
         if self.status != "playing" or player.is_spectator:
             return Visibility.HIDDEN
-        return Visibility.VISIBLE
+        user = self.get_user(player)
+        if self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return Visibility.HIDDEN
+
+    def _is_touch_private_info_hidden(self, player: Player) -> Visibility:
+        if self.status != "playing" or player.is_spectator:
+            return Visibility.HIDDEN
+        user = self.get_user(player)
+        if self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return Visibility.HIDDEN
 
     def _is_always_hidden(self, player: Player) -> Visibility:
         return Visibility.HIDDEN
+
+    def _is_whose_turn_hidden(self, player: Player) -> Visibility:
+        user = self.get_user(player)
+        if self.status == "playing" and self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return super()._is_whose_turn_hidden(player)
+
+    def _is_whos_at_table_hidden(self, player: Player) -> Visibility:
+        user = self.get_user(player)
+        if self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return super()._is_whos_at_table_hidden(player)
+
+    def _is_check_scores_hidden(self, player: Player) -> Visibility:
+        user = self.get_user(player)
+        if self.status == "playing" and self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return super()._is_check_scores_hidden(player)
 
     def create_turn_action_set(self, player: TwentyOnePlayer) -> ActionSet:
         user = self.get_user(player)
@@ -354,6 +436,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
                 handler="_action_hit",
                 is_enabled="_is_turn_action_enabled",
                 is_hidden="_is_turn_action_hidden",
+                show_in_actions_menu=False,
             )
         )
         action_set.add(
@@ -363,6 +446,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
                 handler="_action_stand",
                 is_enabled="_is_turn_action_enabled",
                 is_hidden="_is_turn_action_hidden",
+                show_in_actions_menu=False,
             )
         )
         action_set.add(
@@ -377,6 +461,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
                     options="_options_for_play_modifier",
                     bot_select="_bot_select_play_modifier",
                 ),
+                show_in_actions_menu=False,
             )
         )
         return action_set
@@ -409,7 +494,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
                 label=Localization.get(locale, "twentyone-read-opponent-face-up"),
                 handler="_action_read_opponent_face_up",
                 is_enabled="_is_check_enabled",
-                is_hidden="_is_always_hidden",
+                is_hidden="_is_touch_private_info_hidden",
             )
         )
         action_set.add(
@@ -418,7 +503,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
                 label=Localization.get(locale, "twentyone-read-current-hand"),
                 handler="_action_read_current_hand",
                 is_enabled="_is_check_enabled",
-                is_hidden="_is_always_hidden",
+                is_hidden="_is_touch_private_info_hidden",
             )
         )
         action_set.add(
@@ -427,7 +512,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
                 label=Localization.get(locale, "twentyone-read-current-bets"),
                 handler="_action_read_current_bets",
                 is_enabled="_is_check_enabled",
-                is_hidden="_is_always_hidden",
+                is_hidden="_is_touch_private_info_hidden",
             )
         )
         action_set.add(
@@ -436,9 +521,24 @@ class TwentyOneGame(ActionGuardMixin, Game):
                 label=Localization.get(locale, "twentyone-read-active-effects"),
                 handler="_action_read_active_effects",
                 is_enabled="_is_check_enabled",
-                is_hidden="_is_always_hidden",
+                is_hidden="_is_touch_private_info_hidden",
             )
         )
+        if self.is_touch_client(user):
+            self._order_touch_standard_actions(
+                action_set,
+                [
+                    "modifier_guide",
+                    "check_21_status",
+                    "read_21_opponent_face_up",
+                    "read_21_hand",
+                    "read_21_bets",
+                    "read_21_active_effects",
+                    "check_scores",
+                    "whose_turn",
+                    "whos_at_table",
+                ],
+            )
         return action_set
 
     def setup_keybinds(self) -> None:
@@ -480,7 +580,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
             state=KeybindState.ACTIVE,
         )
         self.define_keybind(
-            "b",
+            "w",
             Localization.get("en", "twentyone-read-current-bets"),
             ["read_21_bets"],
             state=KeybindState.ACTIVE,
@@ -2484,5 +2584,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
         final_hp = result.custom_data.get("final_hp", {})
         sorted_hp = sorted(final_hp.items(), key=lambda item: item[1], reverse=True)
         for index, (name, hp) in enumerate(sorted_hp, 1):
-            lines.append(f"{index}. {name}: {hp} HP")
+            lines.append(
+                Localization.get(locale, "twentyone-final-hp-line", rank=index, player=name, hp=hp)
+            )
         return lines

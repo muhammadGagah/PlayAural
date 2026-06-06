@@ -71,6 +71,7 @@ class SenetGame(Game):
 
     winner_name: str | None = None
     _nav_cursor: int | None = None
+    _nav_skip_rebuild: bool = False
 
     @classmethod
     def get_name(cls) -> str:
@@ -133,84 +134,121 @@ class SenetGame(Game):
         action_set.add(
             Action(
                 id="navigate_next",
-                label="Next",
+                label=Localization.get(locale, "senet-next-piece"),
                 handler="_action_navigate_next",
                 is_enabled="_is_navigate_enabled",
-                is_hidden="_is_always_hidden",
+                is_hidden="_is_navigate_hidden",
                 show_in_actions_menu=False,
             )
         )
         action_set.add(
             Action(
                 id="navigate_prev",
-                label="Previous",
+                label=Localization.get(locale, "senet-previous-piece"),
                 handler="_action_navigate_prev",
                 is_enabled="_is_navigate_enabled",
-                is_hidden="_is_always_hidden",
+                is_hidden="_is_navigate_hidden",
                 show_in_actions_menu=False,
             )
         )
 
-        # Info actions
-        local_actions = [
+        return action_set
+
+    def create_standard_action_set(self, player: Player) -> ActionSet:
+        """Create standard info actions for Senet."""
+        action_set = super().create_standard_action_set(player)
+        user = self.get_user(player)
+        locale = user.locale if user else "en"
+
+        info_actions = [
             Action(
                 id="check_status",
                 label=Localization.get(locale, "senet-check-status"),
                 handler="_action_check_status",
                 is_enabled="_is_info_enabled",
-                is_hidden="_is_always_hidden",
+                is_hidden="_is_touch_info_hidden",
+                include_spectators=True,
             ),
             Action(
                 id="check_sticks",
                 label=Localization.get(locale, "senet-check-sticks"),
                 handler="_action_check_sticks",
                 is_enabled="_is_info_enabled",
-                is_hidden="_is_always_hidden",
+                is_hidden="_is_touch_info_hidden",
+                include_spectators=True,
             ),
             Action(
                 id="check_score",
                 label=Localization.get(locale, "senet-check-score"),
                 handler="_action_check_score",
                 is_enabled="_is_info_enabled",
-                is_hidden="_is_always_hidden",
+                is_hidden="_is_touch_info_hidden",
+                include_spectators=True,
             ),
         ]
-        for action in reversed(local_actions):
+        for action in info_actions:
             action_set.add(action)
-            if action.id in action_set._order:
-                action_set._order.remove(action.id)
-            action_set._order.insert(0, action.id)
 
+        if self.is_touch_client(user):
+            self._order_touch_standard_actions(
+                action_set,
+                [
+                    "check_status",
+                    "check_sticks",
+                    "check_score",
+                    "whose_turn",
+                    "whos_at_table",
+                ],
+            )
         return action_set
 
     def setup_keybinds(self) -> None:
         super().setup_keybinds()
 
-        if "s" in self._keybinds:
-            self._keybinds["s"] = []
-        if "shift+s" in self._keybinds:
-            self._keybinds["shift+s"] = []
-
         self.define_keybind(
-            "e", "Status", ["check_status"], state=KeybindState.ACTIVE, include_spectators=True
+            "e",
+            Localization.get("en", "senet-check-status"),
+            ["check_status"],
+            state=KeybindState.ACTIVE,
+            include_spectators=True,
         )
         self.define_keybind(
-            "c", "Sticks", ["check_sticks"], state=KeybindState.ACTIVE, include_spectators=True
+            "c",
+            Localization.get("en", "senet-check-sticks"),
+            ["check_sticks"],
+            state=KeybindState.ACTIVE,
+            include_spectators=True,
         )
         self.define_keybind(
-            "s", "Score", ["check_score"], state=KeybindState.ACTIVE, include_spectators=True
+            "v",
+            Localization.get("en", "senet-check-score"),
+            ["check_score"],
+            state=KeybindState.ACTIVE,
+            include_spectators=True,
         )
         self.define_keybind(
-            "ctrl+down", "Next piece", ["navigate_next"], state=KeybindState.ACTIVE
+            "ctrl+down",
+            Localization.get("en", "senet-next-piece"),
+            ["navigate_next"],
+            state=KeybindState.ACTIVE,
         )
         self.define_keybind(
-            "ctrl+right", "Next piece", ["navigate_next"], state=KeybindState.ACTIVE
+            "ctrl+right",
+            Localization.get("en", "senet-next-piece"),
+            ["navigate_next"],
+            state=KeybindState.ACTIVE,
         )
         self.define_keybind(
-            "ctrl+up", "Previous piece", ["navigate_prev"], state=KeybindState.ACTIVE
+            "ctrl+up",
+            Localization.get("en", "senet-previous-piece"),
+            ["navigate_prev"],
+            state=KeybindState.ACTIVE,
         )
         self.define_keybind(
-            "ctrl+left", "Previous piece", ["navigate_prev"], state=KeybindState.ACTIVE
+            "ctrl+left",
+            Localization.get("en", "senet-previous-piece"),
+            ["navigate_prev"],
+            state=KeybindState.ACTIVE,
         )
 
     # ======================================================================
@@ -258,7 +296,14 @@ class SenetGame(Game):
             idx = 0 if direction == 1 else len(targets) - 1
 
         self._nav_cursor = targets[idx]
+        self._nav_skip_rebuild = True
         self.update_player_menu(player, selection_id=f"sq_{targets[idx]}")
+
+    def _should_rebuild_after_keybind(self, player: Player, executed_any: bool) -> bool:
+        if self._nav_skip_rebuild:
+            self._nav_skip_rebuild = False
+            return False
+        return super()._should_rebuild_after_keybind(player, executed_any)
 
     def _get_movable_squares(self, player_num: int) -> list[int]:
         gs = self.game_state
@@ -334,6 +379,19 @@ class SenetGame(Game):
                 grid_items.append(item)
             else:
                 other_items.append(item)
+        if self.is_touch_client(user):
+            other_items.append(
+                MenuItem(
+                    text=Localization.get(user.locale, "actions-menu"),
+                    id="web_actions_menu",
+                )
+            )
+            other_items.append(
+                MenuItem(
+                    text=Localization.get(user.locale, "game-leave"),
+                    id="web_leave_table",
+                )
+            )
         return grid_items, other_items
 
     # ======================================================================
@@ -785,3 +843,27 @@ class SenetGame(Game):
 
     def _is_always_hidden(self, player: Player) -> Visibility:
         return Visibility.HIDDEN
+
+    def _is_navigate_hidden(self, player: Player) -> Visibility:
+        user = self.get_user(player)
+        if self._is_navigate_enabled(player) is None and self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return Visibility.HIDDEN
+
+    def _is_touch_info_hidden(self, player: Player) -> Visibility:
+        user = self.get_user(player)
+        if self.status == "playing" and self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return Visibility.HIDDEN
+
+    def _is_whose_turn_hidden(self, player: Player) -> Visibility:
+        user = self.get_user(player)
+        if self.status == "playing" and self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return super()._is_whose_turn_hidden(player)
+
+    def _is_whos_at_table_hidden(self, player: Player) -> Visibility:
+        user = self.get_user(player)
+        if self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return super()._is_whos_at_table_hidden(player)

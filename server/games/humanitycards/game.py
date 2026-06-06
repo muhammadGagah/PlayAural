@@ -36,6 +36,7 @@ from ...ui.keybinds import KeybindState
 # ==========================================================================
 
 _humanity_packs: list[dict] | None = None
+CAH_SOUND_DIR = "game_cah"
 
 
 def load_humanity_packs() -> list[dict]:
@@ -450,7 +451,7 @@ class HumanityCardsGame(Game):
             action_set.add(
                 Action(
                     id=f"toggle_card_{i}",
-                    label=f"Card {i + 1}",
+                    label=Localization.get(locale, "hc-card-number", number=i + 1),
                     handler=f"_action_toggle_card_{i}",
                     is_enabled="_is_toggle_card_enabled",
                     is_hidden="_is_toggle_card_hidden",
@@ -463,7 +464,7 @@ class HumanityCardsGame(Game):
         action_set.add(
             Action(
                 id="judge_prompt_header",
-                label="Choose the best card",
+                label=Localization.get(locale, "hc-choose-best-card"),
                 handler="_action_noop",
                 is_enabled="_is_judge_prompt_header_enabled",
                 is_hidden="_is_judge_prompt_header_hidden",
@@ -477,7 +478,7 @@ class HumanityCardsGame(Game):
             action_set.add(
                 Action(
                     id=f"judge_pick_{i}",
-                    label=f"Submission {i + 1}",
+                    label=Localization.get(locale, "hc-submission-number", number=i + 1),
                     handler=f"_action_judge_pick_{i}",
                     is_enabled="_is_judge_pick_enabled",
                     is_hidden="_is_judge_pick_hidden",
@@ -495,7 +496,7 @@ class HumanityCardsGame(Game):
                 is_enabled="_is_view_submission_enabled",
                 is_hidden="_is_view_submission_hidden",
                 get_label="_get_view_submission_label",
-                show_in_actions_menu=True,
+                show_in_actions_menu=False,
             )
         )
 
@@ -508,10 +509,18 @@ class HumanityCardsGame(Game):
                 is_enabled="_is_submit_enabled",
                 is_hidden="_is_submit_hidden",
                 get_label="_get_submit_label",
+                show_in_actions_menu=False,
             )
         )
 
-        # View black card
+        return action_set
+
+    def create_standard_action_set(self, player: Player) -> ActionSet:
+        """Create standard info actions for Cards Against Humanity."""
+        action_set = super().create_standard_action_set(player)
+        user = self.get_user(player)
+        locale = user.locale if user else "en"
+
         action_set.add(
             Action(
                 id="view_black_card",
@@ -519,12 +528,9 @@ class HumanityCardsGame(Game):
                 handler="_action_view_black_card",
                 is_enabled="_is_view_enabled",
                 is_hidden="_is_view_hidden",
-                show_in_actions_menu=True,
                 include_spectators=True,
             )
         )
-
-        # Whose judge (keybind-only, J key)
         action_set.add(
             Action(
                 id="whose_judge",
@@ -535,6 +541,18 @@ class HumanityCardsGame(Game):
                 include_spectators=True,
             )
         )
+
+        if self.is_touch_client(user):
+            self._order_touch_standard_actions(
+                action_set,
+                [
+                    "view_black_card",
+                    "whose_judge",
+                    "check_scores",
+                    "whose_turn",
+                    "whos_at_table",
+                ],
+            )
 
         return action_set
 
@@ -547,7 +565,7 @@ class HumanityCardsGame(Game):
             key = str((i + 1) % 10)  # 1,2,3,...,9,0
             self.define_keybind(
                 key,
-                f"Toggle card {i + 1}",
+                Localization.get("en", "hc-toggle-card-keybind", number=i + 1),
                 [f"toggle_card_{i}"],
                 state=KeybindState.ACTIVE,
             )
@@ -555,7 +573,7 @@ class HumanityCardsGame(Game):
         # Space to submit
         self.define_keybind(
             "space",
-            "Submit cards",
+            Localization.get("en", "hc-submit-cards-keybind"),
             ["submit_cards"],
             state=KeybindState.ACTIVE,
         )
@@ -563,7 +581,7 @@ class HumanityCardsGame(Game):
         # C to view black card
         self.define_keybind(
             "c",
-            "View prompt",
+            Localization.get("en", "hc-view-black-card"),
             ["view_black_card"],
             state=KeybindState.ACTIVE,
             include_spectators=True,
@@ -572,7 +590,7 @@ class HumanityCardsGame(Game):
         # V to view/preview submission
         self.define_keybind(
             "v",
-            "View submission",
+            Localization.get("en", "hc-view-submission"),
             ["view_submission"],
             state=KeybindState.ACTIVE,
         )
@@ -582,7 +600,7 @@ class HumanityCardsGame(Game):
         # J to announce judges
         self.define_keybind(
             "j",
-            "Who is judging",
+            Localization.get("en", "hc-whose-judge"),
             ["whose_judge"],
             state=KeybindState.ACTIVE,
             include_spectators=True,
@@ -627,11 +645,11 @@ class HumanityCardsGame(Game):
     def _get_toggle_card_label(self, player: Player, action_id: str) -> str:
         hcp: HumanityCardsPlayer = player  # type: ignore
         idx = int(action_id.removeprefix("toggle_card_"))
-        if idx >= len(hcp.hand):
-            return f"Card {idx + 1}"
-        card = hcp.hand[idx]
         user = self.get_user(player)
         locale = user.locale if user else "en"
+        if idx >= len(hcp.hand):
+            return Localization.get(locale, "hc-card-number", number=idx + 1)
+        card = hcp.hand[idx]
         if idx in hcp.selected_indices:
             return Localization.get(locale, "hc-card-selected", text=card["text"])
         return Localization.get(locale, "hc-card-not-selected", text=card["text"])
@@ -714,7 +732,9 @@ class HumanityCardsGame(Game):
                 if self.current_black_card:
                     return self._fill_in_blanks(self.current_black_card["text"], sub["cards"])
                 return ", ".join(sub["cards"])
-        return f"Submission {idx + 1}"
+        user = self.get_user(player)
+        locale = user.locale if user else "en"
+        return Localization.get(locale, "hc-submission-number", number=idx + 1)
 
     # ==========================================================================
     # Judge prompt header callbacks (static text)
@@ -736,10 +756,12 @@ class HumanityCardsGame(Game):
         return Visibility.VISIBLE
 
     def _get_judge_prompt_header_label(self, player: Player, action_id: str) -> str:
+        user = self.get_user(player)
+        locale = user.locale if user else "en"
         if self.current_black_card:
             prompt_text = self._speech_friendly_black(self.current_black_card["text"])
-            return f"Choose the best card that matches: {prompt_text}"
-        return "Choose the best card"
+            return Localization.get(locale, "hc-choose-best-card-for", prompt=prompt_text)
+        return Localization.get(locale, "hc-choose-best-card")
 
     def _get_submission_options(self, player: Player) -> list[str]:
         """Get submission options for judge's menu."""
@@ -768,26 +790,47 @@ class HumanityCardsGame(Game):
     # ==========================================================================
 
     def _is_whose_judge_hidden(self, player: Player) -> Visibility:
+        user = self.get_user(player)
+        if self.status == "playing" and self.is_touch_client(user):
+            return Visibility.VISIBLE
         # Keybind-only — always hidden from menu
         return Visibility.HIDDEN
+
+    def _is_whose_turn_hidden(self, player: Player) -> Visibility:
+        user = self.get_user(player)
+        if self.status == "playing" and self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return super()._is_whose_turn_hidden(player)
+
+    def _is_whos_at_table_hidden(self, player: Player) -> Visibility:
+        user = self.get_user(player)
+        if self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return super()._is_whos_at_table_hidden(player)
+
+    def _format_names(self, locale: str, names: list[str]) -> str:
+        """Format a player-name list with the listener's locale rules."""
+        if not names:
+            return ""
+        return Localization.format_list_and(locale, names)
+
+    def _speak_judge_announcement(self, user) -> None:
+        judges = self._get_judges()
+        if not judges:
+            return
+        user.speak_l(
+            "hc-judge-is",
+            buffer="game",
+            judges=self._format_names(user.locale, [judge.name for judge in judges]),
+            count=len(judges),
+        )
 
     def _action_whose_judge(self, player: Player, action_id: str) -> None:
         """Announce who the current judge(s) are."""
         user = self.get_user(player)
         if not user:
             return
-        judges = self._get_judges()
-        if len(judges) == 1:
-            user.speak_l("hc-judge-is", buffer="game", player=judges[0].name, count=1, others="")
-        elif judges:
-            others = ", ".join(j.name for j in judges[1:])
-            user.speak_l(
-                "hc-judge-is",
-                buffer="game",
-                player=judges[0].name,
-                count=len(judges),
-                others=others,
-            )
+        self._speak_judge_announcement(user)
 
     def _action_whose_turn(self, player: Player, action_id: str) -> None:
         """Override default whose_turn to show submission status."""
@@ -796,13 +839,17 @@ class HumanityCardsGame(Game):
             return
 
         judges = self._get_judges()
-        judge_names = ", ".join(j.name for j in judges)
+        judge_names = self._format_names(user.locale, [j.name for j in judges])
 
         if self.phase == "submitting":
             # List who hasn't submitted
             waiting = [p.name for p in self._get_non_judges() if p.submitted_cards is None]
             if waiting:
-                user.speak_l("hc-waiting-for", buffer="game", names=", ".join(waiting))
+                user.speak_l(
+                    "hc-waiting-for",
+                    buffer="game",
+                    names=self._format_names(user.locale, waiting),
+                )
             else:
                 user.speak_l("hc-all-submitted-waiting-judge", buffer="game", judge=judge_names)
         elif self.phase == "judging":
@@ -817,6 +864,9 @@ class HumanityCardsGame(Game):
 
     def _is_view_hidden(self, player: Player) -> Visibility:
         if self.status != "playing" or self.current_black_card is None:
+            return Visibility.HIDDEN
+        user = self.get_user(player)
+        if not self.is_touch_client(user):
             return Visibility.HIDDEN
         # Hide for judges during judging — prompt is shown in the header
         hcp: HumanityCardsPlayer = player  # type: ignore
@@ -841,6 +891,9 @@ class HumanityCardsGame(Game):
         if self.status != "playing":
             return Visibility.HIDDEN
         if self.phase not in ("submitting", "judging"):
+            return Visibility.HIDDEN
+        user = self.get_user(player)
+        if not self.is_touch_client(user):
             return Visibility.HIDDEN
         hcp: HumanityCardsPlayer = player  # type: ignore
         if self._is_judge(hcp):
@@ -875,14 +928,14 @@ class HumanityCardsGame(Game):
         if index in hcp.selected_indices:
             hcp.selected_indices.remove(index)
             if user:
-                user.play_sound("game_humanitycards/cardunselect.ogg")
+                user.play_sound(f"{CAH_SOUND_DIR}/cardunselect.ogg")
         else:
             if len(hcp.selected_indices) >= required:
                 # Deselect first to make room
                 hcp.selected_indices.pop(0)
             hcp.selected_indices.append(index)
             if user:
-                user.play_sound("game_humanitycards/cardselect.ogg")
+                user.play_sound(f"{CAH_SOUND_DIR}/cardselect.ogg")
 
         self.rebuild_player_menu(player)
 
@@ -1031,7 +1084,7 @@ class HumanityCardsGame(Game):
         hcp.selected_indices = []
 
         # Sound + announcement
-        self.play_sound(f"game_humanitycards/submit{random.randint(1, 2)}.ogg")  # nosec B311
+        self.play_sound(f"{CAH_SOUND_DIR}/submit{random.randint(1, 2)}.ogg")  # nosec B311
         user = self.get_user(player)
         if user:
             user.speak_l("hc-submitted", buffer="game")
@@ -1086,7 +1139,7 @@ class HumanityCardsGame(Game):
 
         # Play judge choice sound
         self.play_sound(
-            f"game_humanitycards/judgechoice{random.randint(1, 3)}.ogg"  # nosec B311
+            f"{CAH_SOUND_DIR}/judgechoice{random.randint(1, 3)}.ogg"  # nosec B311
         )
 
         self.broadcast_l(
@@ -1180,6 +1233,12 @@ class HumanityCardsGame(Game):
             return "action-not-playing"
         return None
 
+    def _is_check_scores_hidden(self, player: Player) -> Visibility:
+        user = self.get_user(player)
+        if self.status == "playing" and self.is_touch_client(user):
+            return Visibility.VISIBLE
+        return super()._is_check_scores_hidden(player)
+
     def _action_check_scores(self, player: Player, action_id: str) -> None:
         user = self.get_user(player)
         if not user:
@@ -1189,20 +1248,21 @@ class HumanityCardsGame(Game):
             key=lambda p: p.score,  # type: ignore
             reverse=True,
         )
-        parts = [f"{p.name}: {p.score}" for p in sorted_players]  # type: ignore
-        user.speak(". ".join(parts) + ".", buffer="game")
+        for p in sorted_players:
+            user.speak_l("hc-score-line", buffer="game", player=p.name, score=p.score)  # type: ignore
 
     def _action_check_scores_detailed(self, player: Player, action_id: str) -> None:
         user = self.get_user(player)
         if not user:
             return
+        locale = user.locale
         sorted_players = sorted(
             self.get_active_players(),
             key=lambda p: p.score,  # type: ignore
             reverse=True,
         )
         lines = [
-            f"{p.name}: {p.score} points"  # type: ignore
+            Localization.get(locale, "hc-score-line", player=p.name, score=p.score)  # type: ignore
             for p in sorted_players
         ]
         self.status_box(player, lines)
@@ -1239,6 +1299,10 @@ class HumanityCardsGame(Game):
 
         # Deal initial hands
         self.broadcast_l("hc-game-starting", buffer="game")
+        for p in active_players:
+            user = self.get_user(p)
+            if user and user.locale.startswith("vi"):
+                user.speak_l("hc-english-content-note", buffer="game")
         self.broadcast_l("hc-dealing-cards", buffer="game", count=self.options.hand_size)
         for p in active_players:
             hp: HumanityCardsPlayer = p  # type: ignore
@@ -1286,20 +1350,10 @@ class HumanityCardsGame(Game):
         self.broadcast_l("hc-round-start", buffer="game", round=self.round)
 
         # Announce judge(s)
-        judges = self._get_judges()
-        if len(judges) == 1:
-            self.broadcast_l(
-                "hc-judge-is", buffer="game", player=judges[0].name, count=1, others=""
-            )
-        else:
-            others = ", ".join(j.name for j in judges[1:])
-            self.broadcast_l(
-                "hc-judge-is",
-                buffer="game",
-                player=judges[0].name,
-                count=len(judges),
-                others=others,
-            )
+        for p in self.players:
+            user = self.get_user(p)
+            if user:
+                self._speak_judge_announcement(user)
 
         # Announce black card
         black_text = self._speech_friendly_black(self.current_black_card["text"])
@@ -1339,7 +1393,7 @@ class HumanityCardsGame(Game):
         self.submission_order = list(range(len(self.submissions)))
         random.shuffle(self.submission_order)  # nosec B311
 
-        self.play_sound("game_humanitycards/judging.ogg")
+        self.play_sound(f"{CAH_SOUND_DIR}/judging.ogg")
         self.broadcast_l("hc-judging-start", buffer="game")
 
         # Jolt judge bots
@@ -1351,7 +1405,7 @@ class HumanityCardsGame(Game):
 
     def _end_game(self, winner: HumanityCardsPlayer) -> None:
         """End the game and announce the winner."""
-        self.play_sound("game_humanitycards/win.ogg")
+        self.play_sound(f"{CAH_SOUND_DIR}/win.ogg")
         self.broadcast_personal_l(
             winner,
             "hc-you-win",
@@ -1487,6 +1541,8 @@ class HumanityCardsGame(Game):
 
         final_scores = result.custom_data.get("final_scores", {})
         for i, (name, score) in enumerate(final_scores.items(), 1):
-            lines.append(f"{i}. {name}: {score}")
+            lines.append(
+                Localization.get(locale, "hc-final-score-line", rank=i, player=name, score=score)
+            )
 
         return lines

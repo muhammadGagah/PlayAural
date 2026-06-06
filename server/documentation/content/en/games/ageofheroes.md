@@ -92,7 +92,7 @@ Combat bonuses: having at least one general gives +2 to your roll; the defender 
 
 
 
-\* \*\*Empire of Five Cities:\*\* Be the first to accumulate 5 cities (configurable).
+\* \*\*Empire of Cities:\*\* Be the first to accumulate the configured number of cities.
 
 \* \*\*Carriers of Great Culture:\*\* Collect all 5 of your tribe's special resource cards to complete your monument.
 
@@ -106,9 +106,7 @@ Combat bonuses: having at least one general gives +2 to your roll; the defender 
 
 The host can configure these settings at the table before starting:
 
-\* \*\*Victory Cities:\*\* The number of cities required to win by the Empire path (default 5, configurable from 3 to 7).
-
-\* \*\*Roads Only to Neighbors:\*\* When enabled (the default), roads can only be built to your immediate left and right neighbors in the seating arrangement.
+\* \*\*Victory Cities:\*\* The number of cities required to win by the Empire path (default 5, range 3 to 7).
 
 
 
@@ -132,8 +130,8 @@ You discard the two Irons and end the turn with Wood, Stone, Grain, Gold, Stone.
 
 
 
-\* \*\*S:\*\* Check status of all players (tribe, cities, armies, monument progress).
+\* \*\*V:\*\* Check status of all players (tribe, cities, armies, monument progress).
 
-\* \*\*Shift+S:\*\* Detailed status (includes generals, fortresses, roads, and recovering or returning armies).
+\* \*\*Shift+V:\*\* Detailed status (includes generals, fortresses, roads, and recovering or returning armies).
 
 \* \*\*H:\*\* Check the cards currently in your hand.
