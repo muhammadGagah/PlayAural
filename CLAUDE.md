@@ -22,11 +22,17 @@ The project is open source under the **GNU GENERAL PUBLIC LICENSE**. See [LICENS
 cd server && python -m server
 python -m server --host 0.0.0.0 --port 9000 --ssl-cert cert.pem --ssl-key key.pem
 
-# Run tests
-cd server && pytest
-# Single test
-cd server && pytest tests/test_file.py::test_function
+# Run tests — from the REPO ROOT, not `cd server`: a relative locales path in
+# the voice-service tests breaks under a server-relative working directory.
+python -m pytest server/tests -q
+# Single test / file
+python -m pytest server/tests/test_file.py::test_function
 ```
+
+During iteration, run only the tests covering the files you touched and their
+dependents. The suite is ~1400 tests and takes 3-4 minutes; running it whole as
+an inner-loop step is a waste. Run the full suite before committing anything that
+crosses subsystems, and before landing a feature — not after every edit.
 
 ### Desktop Client
 ```bash
@@ -208,6 +214,29 @@ Rules:
 - `advance_turn()` immediately after `set_turn_players(...)` skips the first player and is almost always wrong
 - use `get_active_players()` for gameplay logic, results, and winner calculations
 
+#### Menu Focus on Refresh and Turn Transitions
+The client preserves the user's current focus across an `update_menu` but resets
+it to the first item on a `show_menu` (full re-show). `update_player_menu` /
+`update_all_menus` send `update_menu`; `rebuild_player_menu` / `rebuild_all_menus`
+send `show_menu`.
+
+Consequences:
+- The genuine first display of a game menu (table start, return-to-game, which
+  the server drives through `rebuild_player_menu`) must use the `rebuild_*` path.
+- Every in-play refresh of an already-shown menu should use the `update_*` path,
+  or the player's focus snaps back to the first item.
+- This bites hardest at turn transitions and whenever turn-specific actions
+  appear/disappear: persistent actions shift position and, on a `show_menu`, the
+  cursor jumps to the top. For a persistent grid such as the backgammon board
+  (visible throughout play), each player holds a live focus during the
+  opponent's turn, so a turn-pass `rebuild_all_menus()` yanks the *receiving*
+  player to the first cell at the start of their turn.
+- Fix: refresh turn transitions and in-play state changes with the focus-
+  preserving `update_all_menus()`. Where the action list legitimately changes
+  shape and a fixed landing spot is preferable, the alternative is to jump focus
+  deliberately to the top at the start of the user's turn — choose one, don't
+  leave focus to chance.
+
 #### Score Management and Units
 Shared score display is handled by `GameScoresMixin` and `TeamManager`.
 
@@ -281,6 +310,21 @@ Any new persistent feature must define:
 - how stale data is cleaned up
 - what happens on account deletion
 - tests for cleanup behavior
+
+### Localization
+- All player-facing strings go through Fluent (`speak_l`, `broadcast_l`,
+  `broadcast_personal_l`, and the localized option/pref/sequence helpers). No
+  hardcoded English may reach players.
+- Pass raw data as kwargs and let Fluent render; do not pre-format strings.
+  Use select/plural expressions when output varies by game state.
+- PlayAural ships English and Vietnamese, and — unlike upstream PlayPalace,
+  where translators own everything but `en` — here the agent authors **both**.
+  A new or changed `en` key must land with its `vi` counterpart, kept in
+  structural parity: same keys, same `$variables`, matching plural/select arms.
+- Agent-authored Vietnamese is provisional: write it and keep parity, but flag
+  it for native review rather than treating it as final.
+- Prefer writing the `en` strings before the game/feature code — it forces the
+  flow to be planned and every announcement to be enumerated up front.
 
 ### Desktop Client Architecture
 - **`client/ui/main_window.py`** — primary desktop UI and gameplay interaction
