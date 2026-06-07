@@ -70,12 +70,14 @@ export class MobileAudioManager {
   private sfxPlayers = new Set<ExpoAudio.Sound>();
   private retiringMusicPlayers = new Set<ExpoAudio.Sound>();
   private musicVolume = 0.2;
+  private soundVolume = 1.0;
   private ambienceVolume = 0.3;
   private musicTransitionId = 0;
   private musicFadeInterval: ReturnType<typeof setInterval> | null = null;
   private nativeSourceCache = new Map<string, AVPlaybackSource>();
   private nativeSourceLoading = new Map<string, Promise<AVPlaybackSource | null>>();
   private nativeSoundVolumes = new WeakMap<ExpoAudio.Sound, number>();
+  private nativeSfxBaseVolumes = new WeakMap<ExpoAudio.Sound, number>();
   private desiredMusicRequest: DesiredMusicRequest | null = null;
   private desiredAmbienceRequest: DesiredAmbienceRequest | null = null;
 
@@ -265,6 +267,26 @@ export class MobileAudioManager {
         this.desiredAmbienceRequest.loop,
         this.desiredAmbienceRequest.intro,
         this.desiredAmbienceRequest.outro,
+      );
+    }
+  }
+
+  setSoundVolume(volume: number): void {
+    const parsed = Number(volume);
+    this.soundVolume = Number.isFinite(parsed) ? Math.max(0.1, Math.min(1, parsed)) : 1.0;
+
+    for (const sound of this.sfxPlayers) {
+      const baseVolume = this.nativeSfxBaseVolumes.get(sound) ?? 1;
+      const effectiveVolume = Math.max(0, Math.min(1, baseVolume * this.soundVolume));
+      this.nativeSoundVolumes.set(sound, effectiveVolume);
+      void sound.setVolumeAsync(effectiveVolume).catch(() => undefined);
+    }
+
+    if (this.webAudioContext && this.webSfxBus) {
+      this.webSfxBus.gain.setTargetAtTime(
+        this.soundVolume,
+        this.webAudioContext.currentTime,
+        0.05,
       );
     }
   }
@@ -725,6 +747,7 @@ export class MobileAudioManager {
 
   private disposeNativeSound(sound: ExpoAudio.Sound): void {
     this.nativeSoundVolumes.delete(sound);
+    this.nativeSfxBaseVolumes.delete(sound);
     sound.setOnPlaybackStatusUpdate(null);
     void sound.unloadAsync().catch(() => undefined);
   }
@@ -831,7 +854,8 @@ export class MobileAudioManager {
     }
 
     const sound = new ExpoAudio.Sound();
-    const volume = Math.max(0, Math.min(1, options.volume ?? 1));
+    const baseVolume = Math.max(0, Math.min(1, options.volume ?? 1));
+    const volume = Math.max(0, Math.min(1, baseVolume * this.soundVolume));
     const pitch = options.pitch && options.pitch > 0 ? options.pitch : 1;
     const pan = this.normalizePan(options.pan ?? 0);
     const initialStatus: AVPlaybackStatusToSet = {
@@ -857,6 +881,7 @@ export class MobileAudioManager {
         sound.setOnPlaybackStatusUpdate(null);
         this.sfxPlayers.delete(sound);
         this.nativeSoundVolumes.delete(sound);
+        this.nativeSfxBaseVolumes.delete(sound);
         void sound.unloadAsync();
       }
     });
@@ -864,6 +889,7 @@ export class MobileAudioManager {
     try {
       await sound.loadAsync(source, initialStatus);
       this.nativeSoundVolumes.set(sound, volume);
+      this.nativeSfxBaseVolumes.set(sound, baseVolume);
       this.sfxPlayers.add(sound);
       return true;
     } catch (error) {
@@ -1174,7 +1200,7 @@ export class MobileAudioManager {
 
       this.webMasterGain.gain.value = 1;
       this.webMusicBus.gain.value = this.musicVolume;
-      this.webSfxBus.gain.value = 1;
+      this.webSfxBus.gain.value = this.soundVolume;
       this.webAmbienceBus.gain.value = this.ambienceVolume;
     }
 

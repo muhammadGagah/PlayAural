@@ -114,23 +114,76 @@ async def test_audio_submenu_to_audio_input_device_and_back(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_volume_editbox_submit_stays_in_audio_submenu(tmp_path) -> None:
+async def test_volume_selection_menu_submit_returns_to_audio_submenu(tmp_path) -> None:
     server, user = _make_server(tmp_path)
     try:
         server._show_options_menu(user)
         server._nav_push(user, server._show_audio_submenu)
 
         await server._handle_audio_submenu_selection(user, "music_volume")
-        assert _current_menu(server, user.username) == "music_volume_input"
+        assert _current_menu(server, user.username) == "volume_selection_menu"
         state = _user_state(server, user.username)
-        assert state.get("_transient") is True
-        assert state.get("_parent_frame", {}).get("menu") == "options_audio_submenu"
+        assert state.get("volume_type") == "music_volume"
+        assert state.get("_stack", [])[-1].get("menu") == "options_audio_submenu"
 
-        await server._handle_editbox(
-            SimpleNamespace(username=user.username),
-            {"input_id": "music_volume_input", "text": "75"},
-        )
+        item_ids = [item.id for item in user.menus["volume_selection_menu"]["items"]]
+        assert item_ids[:2] == ["volume_0", "volume_10"]
+        assert item_ids[-2:] == ["volume_100", "back"]
+
+        await server._handle_volume_selection(user, "volume_70", state)
+        assert user.preferences.music_volume == 70
         assert _current_menu(server, user.username) == "options_audio_submenu"
+    finally:
+        server._db.close()
+
+
+@pytest.mark.asyncio
+async def test_sound_effects_volume_has_no_off_choice(tmp_path) -> None:
+    server, user = _make_server(tmp_path)
+    try:
+        server._show_options_menu(user)
+        server._nav_push(user, server._show_audio_submenu)
+
+        await server._handle_audio_submenu_selection(user, "sound_volume")
+        assert _current_menu(server, user.username) == "volume_selection_menu"
+        state = _user_state(server, user.username)
+        assert state.get("volume_type") == "sound_volume"
+
+        item_ids = [item.id for item in user.menus["volume_selection_menu"]["items"]]
+        assert "volume_0" not in item_ids
+        assert item_ids[0] == "volume_10"
+        assert item_ids[-2:] == ["volume_100", "back"]
+
+        await server._handle_volume_selection(user, "volume_50", state)
+        assert user.preferences.sound_volume == 50
+        assert _current_menu(server, user.username) == "options_audio_submenu"
+    finally:
+        server._db.close()
+
+
+@pytest.mark.asyncio
+async def test_set_preference_rejects_invalid_volume_steps(tmp_path) -> None:
+    server, user = _make_server(tmp_path)
+    try:
+        client = SimpleNamespace(username=user.username)
+
+        await server._handle_set_preference(
+            client,
+            {"key": "audio/sound_volume", "value": 0},
+        )
+        assert user.preferences.sound_volume == 100
+
+        await server._handle_set_preference(
+            client,
+            {"key": "audio/music_volume", "value": 75},
+        )
+        assert user.preferences.music_volume == 10
+
+        await server._handle_set_preference(
+            client,
+            {"key": "audio/sound_volume", "value": 60},
+        )
+        assert user.preferences.sound_volume == 60
     finally:
         server._db.close()
 
@@ -323,6 +376,28 @@ async def test_restore_frame_audio_submenu(tmp_path) -> None:
         stack = list(_stack(server, user.username))
         server._restore_frame(user, {"menu": "options_audio_submenu"}, stack)
         assert _current_menu(server, user.username) == "options_audio_submenu"
+        assert server._user_states[user.username]["_stack"] == stack
+    finally:
+        server._db.close()
+
+
+@pytest.mark.asyncio
+async def test_restore_frame_volume_selection_menu(tmp_path) -> None:
+    server, user = _make_server(tmp_path)
+    try:
+        server._show_options_menu(user)
+        server._nav_push(user, server._show_audio_submenu)
+        stack = list(_stack(server, user.username))
+        server._restore_frame(
+            user,
+            {"menu": "volume_selection_menu", "volume_type": "sound_volume"},
+            stack,
+        )
+        assert _current_menu(server, user.username) == "volume_selection_menu"
+        assert _user_state(server, user.username).get("volume_type") == "sound_volume"
+        item_ids = [item.id for item in user.menus["volume_selection_menu"]["items"]]
+        assert "volume_0" not in item_ids
+        assert item_ids[0] == "volume_10"
         assert server._user_states[user.username]["_stack"] == stack
     finally:
         server._db.close()

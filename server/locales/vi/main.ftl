@@ -262,8 +262,12 @@ options-category-notifications = Thông báo
 options-category-game = Trò chơi
 
 music-volume-option = Âm lượng nhạc: { $value }%
+sound-volume-option = Âm lượng hiệu ứng: { $value }%
 ambience-volume-option = Âm lượng môi trường: { $value }%
 voice-volume-option = Âm lượng trò chuyện thoại: { $value }%
+volume-choice-off = Tắt
+volume-choice-percent = { $value }%
+volume-choice-current = { $label } (hiện tại)
 audio-input-device-option = Thiết bị đầu vào âm thanh: { $device }
 audio-input-device-default = Thiết bị đầu vào mặc định của hệ thống
 
@@ -274,7 +278,7 @@ play-typing-sounds-option = Âm thanh gõ phím: { $status }
 enter-music-volume = Nhập âm lượng nhạc (0-100)
 enter-ambience-volume = Nhập âm lượng môi trường (0-100)
 enter-voice-volume = Nhập âm lượng trò chuyện thoại (10-100)
-invalid-volume = Âm lượng không hợp lệ. Vui lòng nhập số từ 0 đến 100.
+invalid-volume = Âm lượng không hợp lệ.
 
 dice-not-rolled = Bạn chưa gieo xúc xắc.
 dice-locked = Viên xúc xắc này đã bị khóa.

@@ -63,6 +63,7 @@ OPTIONS_MENU_IDS = frozenset(
     {
         "options_menu",
         "options_audio_submenu",
+        "volume_selection_menu",
         "options_accessibility_submenu",
         "options_notifications_submenu",
         "game_options_menu",
@@ -76,13 +77,53 @@ OPTIONS_MENU_IDS = frozenset(
         "mobile_speech_settings_menu",
         "mobile_tts_engine_menu",
         "mobile_voice_selection_menu",
-        "music_volume_input",
-        "ambience_volume_input",
-        "voice_volume_input",
         "speech_rate_input",
         "mobile_tts_rate_input",
     }
 )
+
+VOLUME_SETTING_SPECS = {
+    "music_volume": {
+        "field": "music_volume",
+        "sync_key": "audio/music_volume",
+        "label_key": "music-volume-option",
+        "minimum": 0,
+        "maximum": 100,
+        "step": 10,
+        "default": 10,
+    },
+    "sound_volume": {
+        "field": "sound_volume",
+        "sync_key": "audio/sound_volume",
+        "label_key": "sound-volume-option",
+        "minimum": 10,
+        "maximum": 100,
+        "step": 10,
+        "default": 100,
+    },
+    "ambience_volume": {
+        "field": "ambience_volume",
+        "sync_key": "audio/ambience_volume",
+        "label_key": "ambience-volume-option",
+        "minimum": 0,
+        "maximum": 100,
+        "step": 10,
+        "default": 20,
+    },
+    "voice_volume": {
+        "field": "voice_volume",
+        "sync_key": "audio/voice_volume",
+        "label_key": "voice-volume-option",
+        "minimum": 10,
+        "maximum": 100,
+        "step": 10,
+        "default": 80,
+    },
+}
+VOLUME_SETTING_BY_SYNC_KEY = {
+    spec["sync_key"]: volume_type
+    for volume_type, spec in VOLUME_SETTING_SPECS.items()
+}
 
 # Default paths based on module location
 _MODULE_DIR = Path(__file__).parent.parent
@@ -116,8 +157,8 @@ class Server:
         "unban_menu", "mute_menu", "mute_duration_menu", "mute_reason_menu",
         "unmute_menu", "manage_motd_menu", "view_motd_menu", "logout_confirm_menu",
         "documentation_menu", "doc_games_menu", "doc_viewer", "email_input",
-        "bio_input", "send_friend_request_input", "send_pm_input", "music_volume_input",
-        "ambience_volume_input", "voice_volume_input", "speech_rate_input", "mobile_tts_rate_input", "waiting_for_approval",
+        "bio_input", "send_friend_request_input", "send_pm_input",
+        "speech_rate_input", "mobile_tts_rate_input", "waiting_for_approval",
         "smtp_settings_menu", "smtp_encryption_menu", "smtp_setting_input",
         "admin_broadcast_input", "admin_motd_version_input", "admin_motd_input",
         "ban_custom_reason_input", "mute_custom_reason_input",
@@ -1797,6 +1838,10 @@ PlayAural Server
                 id="music_volume",
             ),
             MenuItem(
+                text=Localization.get(user.locale, "sound-volume-option", value=prefs.sound_volume),
+                id="sound_volume",
+            ),
+            MenuItem(
                 text=Localization.get(user.locale, "ambience-volume-option", value=prefs.ambience_volume),
                 id="ambience_volume",
             ),
@@ -1834,6 +1879,66 @@ PlayAural Server
             escape_behavior=EscapeBehavior.SELECT_LAST,
         )
         self._user_states[user.username] = {"menu": "options_audio_submenu"}
+
+    def _get_volume_choices(self, volume_type: str) -> list[int]:
+        spec = VOLUME_SETTING_SPECS.get(volume_type)
+        if not spec:
+            return []
+        return list(range(spec["minimum"], spec["maximum"] + 1, spec["step"]))
+
+    def _coerce_valid_volume_value(self, volume_type: str, value: Any) -> int | None:
+        spec = VOLUME_SETTING_SPECS.get(volume_type)
+        if not spec:
+            return None
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return None
+        if parsed not in self._get_volume_choices(volume_type):
+            return None
+        return parsed
+
+    def _volume_choice_label(self, user: NetworkUser, value: int, current_value: int) -> str:
+        if value == 0:
+            label = Localization.get(user.locale, "volume-choice-off")
+        else:
+            label = Localization.get(user.locale, "volume-choice-percent", value=value)
+        if value == current_value:
+            return Localization.get(user.locale, "volume-choice-current", label=label)
+        return label
+
+    def _show_volume_selection_menu(self, user: NetworkUser, volume_type: str) -> None:
+        """Show valid volume levels for a specific audio layer."""
+        spec = VOLUME_SETTING_SPECS.get(volume_type)
+        if not spec:
+            self._show_audio_submenu(user)
+            return
+
+        try:
+            current_value = int(getattr(user.preferences, spec["field"], spec["default"]))
+        except (TypeError, ValueError):
+            current_value = spec["default"]
+        choices = self._get_volume_choices(volume_type)
+        items = [
+            MenuItem(
+                text=self._volume_choice_label(user, choice, current_value),
+                id=f"volume_{choice}",
+            )
+            for choice in choices
+        ]
+        items.append(MenuItem(text=Localization.get(user.locale, "back"), id="back"))
+        position = choices.index(current_value) + 1 if current_value in choices else None
+        user.show_menu(
+            "volume_selection_menu",
+            items,
+            multiletter=True,
+            escape_behavior=EscapeBehavior.SELECT_LAST,
+            position=position,
+        )
+        self._user_states[user.username] = {
+            "menu": "volume_selection_menu",
+            "volume_type": volume_type,
+        }
 
     def _show_accessibility_submenu(self, user: NetworkUser) -> None:
         """Accessibility submenu."""
@@ -2485,39 +2590,7 @@ PlayAural Server
         value = packet.get("text", packet.get("value"))
         prefs = user.preferences
 
-        parent_menu = (state.get("_parent_frame") or {}).get("menu")
-
-        restore_menu_for_volume = (
-            self._show_audio_submenu
-            if parent_menu == "options_audio_submenu"
-            else self._show_options_menu
-        )
-
         numeric_inputs = {
-            "music_volume_input": (
-                "music_volume",
-                "audio/music_volume",
-                0,
-                100,
-                "invalid-volume",
-                restore_menu_for_volume,
-            ),
-            "ambience_volume_input": (
-                "ambience_volume",
-                "audio/ambience_volume",
-                0,
-                100,
-                "invalid-volume",
-                restore_menu_for_volume,
-            ),
-            "voice_volume_input": (
-                "voice_volume",
-                "audio/voice_volume",
-                10,
-                100,
-                "invalid-volume",
-                restore_menu_for_volume,
-            ),
             "speech_rate_input": (
                 "speech_rate",
                 "speech_rate",
@@ -2585,25 +2658,13 @@ PlayAural Server
             prefs.mute_table_chat = bool(value)
         elif key == "gameplay/play_turn_sound":
             prefs.play_turn_sound = bool(value)
-        elif key == "audio/music_volume":
-            try:
-                prefs.music_volume = int(value)
-            except (ValueError, TypeError):
+        elif key in VOLUME_SETTING_BY_SYNC_KEY:
+            volume_type = VOLUME_SETTING_BY_SYNC_KEY[key]
+            parsed_volume = self._coerce_valid_volume_value(volume_type, value)
+            if parsed_volume is None:
                 return
-        elif key == "audio/ambience_volume":
-            try:
-                prefs.ambience_volume = int(value)
-            except (ValueError, TypeError):
-                return
-        elif key == "audio/voice_volume":
-            try:
-                parsed_voice_volume = int(value)
-            except (ValueError, TypeError):
-                return
-            if not 10 <= parsed_voice_volume <= 100:
-                return
-            prefs.voice_volume = parsed_voice_volume
-            value = parsed_voice_volume
+            setattr(prefs, VOLUME_SETTING_SPECS[volume_type]["field"], parsed_volume)
+            value = parsed_volume
         elif key == "audio/input_device_id":
             prefs.desktop_audio_input_device_id = str(value or "").strip()
         elif key == "audio/input_device_name":
@@ -3193,6 +3254,8 @@ PlayAural Server
             await self._handle_options_selection(user, selection_id)
         elif current_menu == "options_audio_submenu":
             await self._handle_audio_submenu_selection(user, selection_id)
+        elif current_menu == "volume_selection_menu":
+            await self._handle_volume_selection(user, selection_id, state)
         elif current_menu == "options_accessibility_submenu":
             await self._handle_accessibility_submenu_selection(user, selection_id)
         elif current_menu == "options_notifications_submenu":
@@ -4182,27 +4245,8 @@ PlayAural Server
         prefs = user.preferences
         if selection_id == "back":
             self._nav_back(user)
-        elif selection_id == "music_volume":
-            user.show_editbox(
-                "music_volume_input",
-                Localization.get(user.locale, "enter-music-volume"),
-                default_value=str(prefs.music_volume),
-            )
-            self._enter_input_state(user, "music_volume_input")
-        elif selection_id == "ambience_volume":
-            user.show_editbox(
-                "ambience_volume_input",
-                Localization.get(user.locale, "enter-ambience-volume"),
-                default_value=str(prefs.ambience_volume),
-            )
-            self._enter_input_state(user, "ambience_volume_input")
-        elif selection_id == "voice_volume":
-            user.show_editbox(
-                "voice_volume_input",
-                Localization.get(user.locale, "enter-voice-volume"),
-                default_value=str(prefs.voice_volume),
-            )
-            self._enter_input_state(user, "voice_volume_input")
+        elif selection_id in VOLUME_SETTING_SPECS:
+            self._nav_push(user, self._show_volume_selection_menu, selection_id)
         elif selection_id == "play_typing_sounds":
             prefs.play_typing_sounds = not prefs.play_typing_sounds
             self._save_user_preferences(user)
@@ -4210,6 +4254,31 @@ PlayAural Server
             self._nav_refresh(user, self._show_audio_submenu)
         elif selection_id == "audio_input_device":
             self._nav_push(user, self._show_audio_input_device_menu)
+
+    async def _handle_volume_selection(
+        self, user: NetworkUser, selection_id: str, state: dict
+    ) -> None:
+        """Handle a selected level from the dynamic volume menu."""
+        if selection_id == "back":
+            self._nav_back(user)
+            return
+
+        volume_type = state.get("volume_type", "")
+        spec = VOLUME_SETTING_SPECS.get(volume_type)
+        if not spec or not selection_id.startswith("volume_"):
+            self._nav_back(user)
+            return
+
+        value = self._coerce_valid_volume_value(volume_type, selection_id.removeprefix("volume_"))
+        if value is None:
+            user.speak_l("invalid-volume", buffer="system")
+            self._nav_refresh(user, self._show_volume_selection_menu, volume_type)
+            return
+
+        setattr(user.preferences, spec["field"], value)
+        self._save_user_preferences(user)
+        self._sync_pref_to_client(user, spec["sync_key"], value)
+        self._nav_back(user)
 
     async def _handle_accessibility_submenu_selection(
         self, user: NetworkUser, selection_id: str
@@ -7420,6 +7489,8 @@ PlayAural Server
             self._show_mobile_voice_selection_menu(user)
         elif menu == "options_audio_submenu":
             self._show_audio_submenu(user)
+        elif menu == "volume_selection_menu":
+            self._show_volume_selection_menu(user, frame.get("volume_type", ""))
         elif menu == "options_accessibility_submenu":
             self._show_accessibility_submenu(user)
         elif menu == "options_notifications_submenu":

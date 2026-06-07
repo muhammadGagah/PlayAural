@@ -42,6 +42,7 @@ class ClientOptionsDialog(wx.Dialog, uisound.SoundBindingsMixin):
 
         self.preferences = type('obj', (object,), {
              'music_volume': self.options.get("audio", {}).get("music_volume", 20) / 100.0,
+             'sound_volume': self.options.get("audio", {}).get("sound_volume", 100) / 100.0,
              'ambience_volume': self.options.get("audio", {}).get("ambience_volume", 20) / 100.0,
              'voice_volume': self.options.get("audio", {}).get("voice_volume", 80) / 100.0,
         })
@@ -105,6 +106,17 @@ class ClientOptionsDialog(wx.Dialog, uisound.SoundBindingsMixin):
         self.music_spin.Bind(wx.EVT_SPINCTRL, self.on_music_spin_change)
         self.music_spin.Bind(wx.EVT_TEXT, self.on_music_spin_change)
         sizer.Add(self.music_spin, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+        sizer.Add(wx.StaticText(panel, label=Localization.get("options-sound-volume-label")),
+                  0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+        self.sound_spin = wx.SpinCtrl(
+            panel,
+            value=str(int(self.preferences.sound_volume * 100)),
+            min=10, max=100,
+        )
+        self.sound_spin.Bind(wx.EVT_SPINCTRL, self.on_sound_spin_change)
+        self.sound_spin.Bind(wx.EVT_TEXT, self.on_sound_spin_change)
+        sizer.Add(self.sound_spin, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
         sizer.Add(wx.StaticText(panel, label=Localization.get("options-ambience-volume-label")),
                   0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
@@ -175,6 +187,12 @@ class ClientOptionsDialog(wx.Dialog, uisound.SoundBindingsMixin):
         if self.sound_manager:
             self.sound_manager.set_ambience_volume(value / 100.0)
 
+    def on_sound_spin_change(self, event):
+        """Handle sound effects volume spin control change - apply immediately."""
+        value = max(10, min(100, self.sound_spin.GetValue()))
+        if self.sound_manager:
+            self.sound_manager.set_sound_volume(value / 100.0)
+
     def on_voice_spin_change(self, event):
         """Handle voice chat volume spin control change - apply immediately."""
         value = max(10, min(100, self.voice_spin.GetValue()))
@@ -188,11 +206,13 @@ class ClientOptionsDialog(wx.Dialog, uisound.SoundBindingsMixin):
         if current_page == 0:  # Audio tab
             audio = data_source.get("audio", {})
             self.music_spin.SetValue(int(audio.get("music_volume", 20)))
+            self.sound_spin.SetValue(int(audio.get("sound_volume", 100)))
             self.ambience_spin.SetValue(int(audio.get("ambience_volume", 20)))
             self.voice_spin.SetValue(int(audio.get("voice_volume", 80)))
 
             if self.sound_manager:
                 self.sound_manager.set_music_volume(audio.get("music_volume", 20) / 100.0)
+                self.sound_manager.set_sound_volume(audio.get("sound_volume", 100) / 100.0)
                 self.sound_manager.set_ambience_volume(audio.get("ambience_volume", 20) / 100.0)
             if self.voice_manager:
                 self.voice_manager.set_voice_volume(audio.get("voice_volume", 80) / 100.0)
@@ -223,10 +243,12 @@ class ClientOptionsDialog(wx.Dialog, uisound.SoundBindingsMixin):
     def on_save(self, event):
         """Save changes and close dialog."""
         music_volume = self.music_spin.GetValue()
+        sound_volume = max(10, min(100, self.sound_spin.GetValue()))
         ambience_volume = self.ambience_spin.GetValue()
         voice_volume = max(10, min(100, self.voice_spin.GetValue()))
 
         self.config_manager.set_client_option("audio/music_volume", music_volume, create_mode=True)
+        self.config_manager.set_client_option("audio/sound_volume", sound_volume, create_mode=True)
         self.config_manager.set_client_option("audio/ambience_volume", ambience_volume, create_mode=True)
         self.config_manager.set_client_option("audio/voice_volume", voice_volume, create_mode=True)
 

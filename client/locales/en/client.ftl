@@ -120,6 +120,7 @@ main-status-unmuted = unmuted
 main-status-muted-suffix = , muted
 
 options-music-volume-label = Music Volume (spin button):
+options-sound-volume-label = Sound Effects Volume:
 options-ambience-volume-label = Ambience Volume (spin button):
 options-voice-volume-label = Voice Chat Volume:
 

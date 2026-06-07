@@ -86,6 +86,7 @@ class UserPreferences:
 
     # Audio preferences
     music_volume: int = 10
+    sound_volume: int = 100
     ambience_volume: int = 20
     voice_volume: int = 80  # 10-100 range (not 0 to avoid complete muting)
     desktop_audio_input_device_id: str = ""
@@ -178,6 +179,7 @@ class UserPreferences:
             "brief_announcements": self.brief_announcements,
             "play_turn_sound": self.play_turn_sound,
             "music_volume": self.music_volume,
+            "sound_volume": self.sound_volume,
             "ambience_volume": self.ambience_volume,
             "voice_volume": self.voice_volume,
             "desktop_audio_input_device_id": self.desktop_audio_input_device_id,
@@ -211,6 +213,7 @@ class UserPreferences:
             brief_announcements=data.get("brief_announcements", False),
             play_turn_sound=data.get("play_turn_sound", True),
             music_volume=data.get("music_volume", 10),
+            sound_volume=data.get("sound_volume", 100),
             ambience_volume=data.get("ambience_volume", 20),
             voice_volume=data.get("voice_volume", 80),
             desktop_audio_input_device_id=data.get("desktop_audio_input_device_id", ""),

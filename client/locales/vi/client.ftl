@@ -120,6 +120,7 @@ main-status-unmuted = đã bật tiếng
 main-status-muted-suffix = , đã tắt tiếng
 
 options-music-volume-label = Âm lượng nhạc nền:
+options-sound-volume-label = Âm lượng hiệu ứng:
 options-ambience-volume-label = Âm lượng môi trường:
 options-voice-volume-label = Âm lượng trò chuyện thoại:
 

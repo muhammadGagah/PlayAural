@@ -7,7 +7,7 @@ from ..users.preferences import UserPreferences, DiceKeepingStyle, PREF_CATEGORI
 # game prefs to the declarative engine must NOT change this set.
 EXPECTED_TO_DICT_KEYS = {
     "brief_announcements",
-    "play_turn_sound", "music_volume", "ambience_volume", "voice_volume",
+    "play_turn_sound", "music_volume", "sound_volume", "ambience_volume", "voice_volume",
     "desktop_audio_input_device_id", "desktop_audio_input_device_name",
     "speech_mode", "speech_rate", "speech_voice",
     "mobile_tts_engine", "mobile_tts_rate", "mobile_tts_voice",

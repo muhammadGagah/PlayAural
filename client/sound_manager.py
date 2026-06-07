@@ -325,6 +325,7 @@ class SoundManager:
         self.current_music = None
         self.current_music_name = None
         self.music_volume = 0.2
+        self.sound_volume = 1.0
         
         import sys
         if getattr(sys, 'frozen', False):
@@ -375,9 +376,13 @@ class SoundManager:
         sound_path = os.path.join(self.sounds_folder, sound_name)
 
         try:
+            requested_volume = max(0.0, min(1.0, float(volume)))
+            effective_volume = max(0.0, min(1.0, requested_volume * self.sound_volume))
             return self.sound_cacher.play(
-                sound_path, pan=pan, volume=volume, pitch=pitch
+                sound_path, pan=pan, volume=effective_volume, pitch=pitch
             )
+        except (TypeError, ValueError):
+            return None
         except Exception:
             return None
 
@@ -538,6 +543,19 @@ class SoundManager:
                 self.current_music.volume = self.music_volume
             except Exception:
                 pass
+
+    def set_sound_volume(self, volume):
+        """
+        Set the sound effects volume.
+
+        Args:
+            volume: Volume level 0.0-1.0
+        """
+        try:
+            parsed_volume = float(volume)
+        except (TypeError, ValueError):
+            parsed_volume = 1.0
+        self.sound_volume = max(0.1, min(1.0, parsed_volume))
 
     def play_menuclick(self):
         """Play the menu click sound."""

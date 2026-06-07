@@ -181,16 +181,16 @@ async def test_server_editbox_escape_cancels_without_validation_error() -> None:
         user = MockUser("Alice", uuid="p1")
         server._users[user.username] = user
         server._user_states[user.username] = {"menu": "options_menu"}
-        server._enter_input_state(user, "music_volume_input")
+        server._enter_input_state(user, "speech_rate_input")
 
         await server._on_client_message(
             SimpleNamespace(username=user.username, authenticated=True),
-            {"type": "escape", "menu_id": "music_volume_input"},
+            {"type": "escape", "menu_id": "speech_rate_input"},
         )
 
         assert server._user_states[user.username]["menu"] == "options_menu"
         assert "options_menu" in user.menus
-        assert user.get_last_spoken() != Localization.get(user.locale, "invalid-volume")
+        assert user.get_last_spoken() != Localization.get(user.locale, "invalid-rate")
     finally:
         server._db.close()
 
@@ -203,20 +203,20 @@ async def test_blank_option_editbox_submission_cancels_without_validation_error(
         user = MockUser("Alice", uuid="p1")
         server._users[user.username] = user
         server._user_states[user.username] = {"menu": "options_menu"}
-        server._enter_input_state(user, "music_volume_input")
+        server._enter_input_state(user, "speech_rate_input")
 
         await server._on_client_message(
             SimpleNamespace(username=user.username, authenticated=True),
             {
                 "type": "editbox",
-                "input_id": "music_volume_input",
+                "input_id": "speech_rate_input",
                 "text": "",
             },
         )
 
         assert server._user_states[user.username]["menu"] == "options_menu"
         assert "options_menu" in user.menus
-        assert user.get_last_spoken() != Localization.get(user.locale, "invalid-volume")
+        assert user.get_last_spoken() != Localization.get(user.locale, "invalid-rate")
     finally:
         server._db.close()
 

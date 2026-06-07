@@ -262,8 +262,12 @@ options-category-notifications = Notifications
 options-category-game = Game
 
 music-volume-option = Music Volume: { $value }%
+sound-volume-option = Sound Effects Volume: { $value }%
 ambience-volume-option = Ambience Volume: { $value }%
 voice-volume-option = Voice Chat Volume: { $value }%
+volume-choice-off = Off
+volume-choice-percent = { $value }%
+volume-choice-current = { $label } (current)
 audio-input-device-option = Audio Input Device: { $device }
 audio-input-device-default = System Default Input Device
 
@@ -274,7 +278,7 @@ play-typing-sounds-option = Play Typing Sounds: { $status }
 enter-music-volume = Enter music volume (0-100)
 enter-ambience-volume = Enter ambience volume (0-100)
 enter-voice-volume = Enter voice chat volume (10-100)
-invalid-volume = Invalid volume. Please enter a number between 0 and 100.
+invalid-volume = Invalid volume.
 
 dice-not-rolled = You haven't rolled yet.
 dice-locked = This die is locked.

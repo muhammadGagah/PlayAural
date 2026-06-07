@@ -671,6 +671,7 @@ class GameClient {
         this.preferences = {
             play_turn_sound: true,
             music_volume: 20,
+            sound_volume: 100,
             ambience_volume: 20,
             voice_volume: 80,
             mute_global_chat: false,
@@ -923,7 +924,10 @@ class GameClient {
                     this.soundManager.setVolume('music', this.musicVolume);
                 }
                 if (config.soundVolume !== undefined) {
-                    this.soundVolume = config.soundVolume;
+                    const restoredSoundVolume = Number(config.soundVolume);
+                    this.soundVolume = Number.isFinite(restoredSoundVolume)
+                        ? Math.max(0.1, Math.min(1.0, restoredSoundVolume))
+                        : 1.0;
                     this.soundManager.setVolume('sound', this.soundVolume);
                 }
                 if (config.ambienceVolume !== undefined) {
@@ -2972,8 +2976,9 @@ class GameClient {
     }
 
     setSoundVolume(vol) {
-        this.soundVolume = vol;
-        this.soundManager.setVolume('sound', vol);
+        const parsed = Number(vol);
+        this.soundVolume = Number.isFinite(parsed) ? Math.max(0.1, Math.min(1.0, parsed)) : 1.0;
+        this.soundManager.setVolume('sound', this.soundVolume);
         this.saveConfig();
     }
 

@@ -159,6 +159,7 @@ class ConfigManager:
             "interface_language": "en",
             "audio": {
                 "music_volume": 20,
+                "sound_volume": 100,
                 "ambience_volume": 20,
                 "voice_volume": 80,
                 "input_device_id": "",

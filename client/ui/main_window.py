@@ -151,6 +151,10 @@ class MainWindow(wx.Frame):
         if "audio" in self.client_options:
             audio = self.client_options["audio"]
             music_volume = audio.get("music_volume", 20) / 100.0
+            try:
+                sound_volume = max(10, min(100, int(audio.get("sound_volume", 100)))) / 100.0
+            except (TypeError, ValueError):
+                sound_volume = 1.0
             ambience_volume = audio.get("ambience_volume", 20) / 100.0
             try:
                 voice_volume = max(10, min(100, int(audio.get("voice_volume", 80)))) / 100.0
@@ -158,6 +162,7 @@ class MainWindow(wx.Frame):
                 voice_volume = 0.8
 
             self.sound_manager.set_music_volume(music_volume)
+            self.sound_manager.set_sound_volume(sound_volume)
             self.sound_manager.set_ambience_volume(ambience_volume)
             if self.voice_manager:
                 self.voice_manager.set_voice_volume(voice_volume)
@@ -912,13 +917,13 @@ class MainWindow(wx.Frame):
     })
     # Options-family menus.
     _OPTIONS_MENU_IDS = frozenset({
-        "options_menu", "options_audio_submenu", "options_accessibility_submenu",
+        "options_menu", "options_audio_submenu", "volume_selection_menu",
+        "options_accessibility_submenu",
         "options_notifications_submenu", "options_game_submenu",
         "language_menu", "speech_settings_menu", "voice_selection_menu",
         "audio_input_device_menu", "dice_keeping_style_menu",
         "mobile_speech_settings_menu", "mobile_tts_engine_menu",
         "mobile_voice_selection_menu",
-        "music_volume_input", "ambience_volume_input", "voice_volume_input",
         "speech_rate_input", "mobile_tts_rate_input",
     })
 
@@ -1849,6 +1854,14 @@ class MainWindow(wx.Frame):
         if key == "audio/music_volume":
             if self.sound_manager:
                 self.sound_manager.set_music_volume(value / 100.0)
+        elif key == "audio/sound_volume":
+            try:
+                vol = max(10, min(100, int(value)))
+            except (TypeError, ValueError):
+                vol = 100
+            self.config_manager.set_client_option(key, vol, create_mode=True)
+            if self.sound_manager:
+                self.sound_manager.set_sound_volume(vol / 100.0)
         elif key == "audio/ambience_volume":
             if self.sound_manager:
                 self.sound_manager.set_ambience_volume(value / 100.0)
@@ -2003,6 +2016,14 @@ class MainWindow(wx.Frame):
                 self.config_manager.set_client_option("audio/music_volume", vol, create_mode=True)
                 if self.sound_manager:
                     self.sound_manager.set_music_volume(vol / 100.0)
+            if "sound_volume" in preferences:
+                try:
+                    vol = max(10, min(100, int(preferences["sound_volume"])))
+                except (TypeError, ValueError):
+                    vol = 100
+                self.config_manager.set_client_option("audio/sound_volume", vol, create_mode=True)
+                if self.sound_manager:
+                    self.sound_manager.set_sound_volume(vol / 100.0)
                     
             if "ambience_volume" in preferences:
                 vol = preferences["ambience_volume"]
