@@ -21,6 +21,7 @@ from ..games.ludo.game import (
     ALL_START_POSITIONS,
     SAFE_SQUARES,
 )
+from ..messages.localization import Localization
 from ..users.test_user import MockUser
 from ..users.bot import Bot
 
@@ -47,12 +48,19 @@ class TestLudoUnit:
         game = LudoGame()
         assert game.options.max_consecutive_sixes == 3
         assert game.options.safe_start_squares is True
+        assert LudoGame.relevant_preferences == ["brief_announcements"]
 
     def test_custom_options(self):
         options = LudoOptions(max_consecutive_sixes=5, safe_start_squares=False)
         game = LudoGame(options=options)
         assert game.options.max_consecutive_sixes == 5
         assert game.options.safe_start_squares is False
+
+    def test_check_board_before_start_uses_localized_error_key(self):
+        game = LudoGame()
+        player = game.add_player("Alice", MockUser("Alice"))
+
+        assert game._is_check_board_enabled(player) == "action-not-playing"
 
     def test_end_screen_uses_tokens_home_unit_from_result(self):
         game = LudoGame()
@@ -482,6 +490,166 @@ class TestLudoActions:
         spoken = self.u1.get_spoken_messages()
         assert any("Alice" in msg for msg in spoken)
 
+    def test_brief_move_announcement_uses_each_listener_preference(self):
+        self.p1.tokens[0].state = "track"
+        self.p1.tokens[0].position = 10
+        self.u1.preferences.brief_announcements = True
+        self.u1.clear_messages()
+        self.u2.clear_messages()
+
+        self.game._move_token(self.p1, self.p1.tokens[0], 3)
+
+        expected_self = Localization.get(
+            "en",
+            "ludo-you-move-track",
+            token=1,
+            position=13,
+            brief="yes",
+            safe="no",
+        )
+        expected_other = Localization.get(
+            "en",
+            "ludo-move-track",
+            player="Alice",
+            color="red",
+            token=1,
+            position=13,
+            brief="no",
+            safe="no",
+        )
+
+        assert expected_self in self.u1.get_spoken_messages()
+        assert "position 13" not in expected_self
+        assert not any("position 13" in message for message in self.u1.get_spoken_messages())
+        assert expected_other in self.u2.get_spoken_messages()
+
+    def test_detailed_move_announcement_marks_safe_square(self):
+        self.p1.tokens[0].state = "track"
+        self.p1.tokens[0].position = 6
+        self.u1.clear_messages()
+        self.u2.clear_messages()
+
+        self.game._move_token(self.p1, self.p1.tokens[0], 3)
+
+        expected_self = Localization.get(
+            "en",
+            "ludo-you-move-track",
+            token=1,
+            position=9,
+            brief="no",
+            safe="yes",
+        )
+        expected_other = Localization.get(
+            "en",
+            "ludo-move-track",
+            player="Alice",
+            color="red",
+            token=1,
+            position=9,
+            brief="no",
+            safe="yes",
+        )
+
+        assert expected_self in self.u1.get_spoken_messages()
+        assert "safe square" in expected_self
+        assert expected_other in self.u2.get_spoken_messages()
+
+    def test_enter_board_marks_safe_start_square_in_detailed_mode(self):
+        self.u1.clear_messages()
+        self.u2.clear_messages()
+
+        self.game._move_token(self.p1, self.p1.tokens[0], 6)
+
+        expected_self = Localization.get(
+            "en",
+            "ludo-you-enter-board",
+            token=1,
+            position=COLOR_STARTS[self.p1.color],
+            brief="no",
+            safe="yes",
+        )
+
+        assert expected_self in self.u1.get_spoken_messages()
+        assert "safe square" in expected_self
+
+    def test_brief_move_announcement_omits_safe_square_annotation(self):
+        self.p1.tokens[0].state = "track"
+        self.p1.tokens[0].position = 6
+        self.u1.preferences.brief_announcements = True
+        self.u1.clear_messages()
+
+        self.game._move_token(self.p1, self.p1.tokens[0], 3)
+
+        expected_self = Localization.get(
+            "en",
+            "ludo-you-move-track",
+            token=1,
+            position=9,
+            brief="yes",
+            safe="yes",
+        )
+
+        assert expected_self in self.u1.get_spoken_messages()
+        assert "position 9" not in expected_self
+        assert "safe square" not in expected_self
+
+    def test_check_board_marks_safe_square_tokens(self):
+        self.p1.tokens[0].state = "track"
+        self.p1.tokens[0].position = 9
+
+        self.game.execute_action(self.p1, "check_board")
+
+        lines = [item.text for item in self.u1.menus["status_box"]["items"]]
+        assert Localization.get(
+            "en",
+            "ludo-token-track",
+            token=1,
+            position=9,
+            safe="yes",
+        ) in lines
+
+    def test_capture_uses_personal_target_and_observer_messages(self):
+        observer = MockUser("Cara")
+        observer_player = self.game.add_player("Cara", observer)
+        observer_player.color = "green"
+        observer_player.tokens = [
+            LudoToken(state="yard", position=0, token_number=index + 1)
+            for index in range(4)
+        ]
+        self.p1.tokens[0].state = "track"
+        self.p1.tokens[0].position = 8
+        self.p2.tokens[0].state = "track"
+        self.p2.tokens[0].position = 10
+        self.u1.clear_messages()
+        self.u2.clear_messages()
+        observer.clear_messages()
+
+        self.game._move_token(self.p1, self.p1.tokens[0], 2)
+
+        assert Localization.get(
+            "en",
+            "ludo-you-capture",
+            captured_player="Bob",
+            captured_color="blue",
+            count=1,
+        ) in self.u1.get_spoken_messages()
+        assert Localization.get(
+            "en",
+            "ludo-your-token-captured",
+            player="Alice",
+            color="red",
+            count=1,
+        ) in self.u2.get_spoken_messages()
+        assert Localization.get(
+            "en",
+            "ludo-captures",
+            player="Alice",
+            color="red",
+            captured_player="Bob",
+            captured_color="blue",
+            count=1,
+        ) in observer.get_spoken_messages()
+
     def test_choose_token_prompt_is_announced(self, monkeypatch):
         self.p1.tokens[0].state = "track"
         self.p1.tokens[0].position = 5
@@ -628,6 +796,44 @@ class TestLudoConsecutiveSixes:
         self.game.execute_action(self.p1, "roll_dice")
         # Should still be same player's turn (extra turn granted, no penalty)
         assert self.game.current_player == old_player
+
+    def test_third_six_penalty_prevents_winning_move(self):
+        self.game.options.max_consecutive_sixes = 3
+        self.p1.finished_count = 3
+        token = self.p1.tokens[0]
+        token.state = "track"
+        token.position = COLOR_ENTRIES[self.p1.color]
+        self.game._sync_team_scores()
+        self.game.turn_start_state = self.game._save_turn_state()
+        self.game.consecutive_sixes = 2
+        self.game.last_roll = 6
+        self.u1.clear_messages()
+        self.u2.clear_messages()
+
+        self.game._move_token(self.p1, token, 6)
+        assert self.p1.finished_count == 4
+
+        self.game._after_move(self.p1)
+
+        assert self.game.status == "playing"
+        assert self.game.game_active is True
+        assert self.p1.finished_count == 3
+        assert token.state == "track"
+        assert token.position == COLOR_ENTRIES[self.p1.color]
+        assert self.game.current_player == self.p2
+        assert Localization.get(
+            "en",
+            "ludo-you-too-many-sixes",
+            count=3,
+        ) in self.u1.get_spoken_messages()
+        assert Localization.get(
+            "en",
+            "ludo-too-many-sixes",
+            player="Alice",
+            color="red",
+            count=3,
+        ) in self.u2.get_spoken_messages()
+        assert not any("wins" in message for message in self.u1.get_spoken_messages())
 
 
 class TestLudoBot:

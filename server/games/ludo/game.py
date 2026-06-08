@@ -90,6 +90,8 @@ class LudoOptions(GameOptions):
 class LudoGame(Game):
     """Ludo: race four tokens around the board and into home."""
 
+    relevant_preferences = ["brief_announcements"]
+
     players: list[LudoPlayer] = field(default_factory=list)
     options: LudoOptions = field(default_factory=LudoOptions)
     score_unit_key = "game-score-unit-tokens-home"
@@ -411,12 +413,22 @@ class LudoGame(Game):
     def _get_home_entry_position(self, player: LudoPlayer) -> int:
         return COLOR_ENTRIES[player.color]
 
+    def _brief_arm(self, user: "User | None") -> str:
+        if user and user.preferences.get_effective(
+            "brief_announcements", game_type=self.get_type()
+        ):
+            return "yes"
+        return "no"
+
     def _is_safe_square(self, position: int, player: LudoPlayer) -> bool:
         if position in SAFE_SQUARES:
             return True
         if self.options.safe_start_squares and position in ALL_START_POSITIONS:
             return True
         return False
+
+    def _safe_square_arm(self, position: int, player: LudoPlayer) -> str:
+        return "yes" if self._is_safe_square(position, player) else "no"
 
     def _get_token_at_position(
         self, position: int, exclude_player: LudoPlayer
@@ -456,12 +468,17 @@ class LudoGame(Game):
                 moveable.append((i, token))
         return moveable
 
-    def _describe_token(self, token: LudoToken, locale: str) -> str:
+    def _describe_token(self, token: LudoToken, locale: str, player: LudoPlayer | None = None) -> str:
         if token.state == "yard":
             return Localization.get(locale, "ludo-token-yard", token=token.token_number)
         if token.state == "track":
+            safe = "yes" if player and self._is_safe_square(token.position, player) else "no"
             return Localization.get(
-                locale, "ludo-token-track", token=token.token_number, position=token.position
+                locale,
+                "ludo-token-track",
+                token=token.token_number,
+                position=token.position,
+                safe=safe,
             )
         if token.state == "home_column":
             return Localization.get(
@@ -507,17 +524,70 @@ class LudoGame(Game):
                     captured_token.state = "yard"
                     captured_token.position = 0
 
-                self.broadcast_l(
+                self._announce_capture(player, captured_player, len(captured_tokens))
+                self.play_sound(
+                    f"game_chess/capture{random.randint(1, NUM_CAPTURE_SOUNDS)}.ogg"  # nosec B311
+                )
+
+    def _announce_player_event(
+        self,
+        player: LudoPlayer,
+        personal_message_id: str,
+        others_message_id: str,
+        **kwargs,
+    ) -> None:
+        for listener in self.players:
+            user = self.get_user(listener)
+            if not user:
+                continue
+            localized_kwargs = dict(kwargs)
+            localized_kwargs.setdefault("brief", self._brief_arm(user))
+            if listener.id == player.id:
+                user.speak_l(personal_message_id, buffer="game", **localized_kwargs)
+            else:
+                user.speak_l(
+                    others_message_id,
+                    buffer="game",
+                    player=player.name,
+                    color=player.color,
+                    **localized_kwargs,
+                )
+
+    def _announce_capture(
+        self,
+        player: LudoPlayer,
+        captured_player: LudoPlayer,
+        count: int,
+    ) -> None:
+        for listener in self.players:
+            user = self.get_user(listener)
+            if not user:
+                continue
+            if listener.id == player.id:
+                user.speak_l(
+                    "ludo-you-capture",
+                    buffer="game",
+                    captured_player=captured_player.name,
+                    captured_color=captured_player.color,
+                    count=count,
+                )
+            elif listener.id == captured_player.id:
+                user.speak_l(
+                    "ludo-your-token-captured",
+                    buffer="game",
+                    player=player.name,
+                    color=player.color,
+                    count=count,
+                )
+            else:
+                user.speak_l(
                     "ludo-captures",
                     buffer="game",
                     player=player.name,
                     color=player.color,
                     captured_player=captured_player.name,
                     captured_color=captured_player.color,
-                    count=len(captured_tokens),
-                )
-                self.play_sound(
-                    f"game_chess/capture{random.randint(1, NUM_CAPTURE_SOUNDS)}.ogg"  # nosec B311
+                    count=count,
                 )
 
     # ======================================================================
@@ -626,7 +696,7 @@ class LudoGame(Game):
 
     def _is_check_board_enabled(self, player: Player) -> str | None:
         if self.status != "playing":
-            return "not-started"
+            return "action-not-playing"
         return None
 
     # ======================================================================
@@ -689,7 +759,7 @@ class LudoGame(Game):
         user = self.get_user(ludo_player)
         locale = user.locale if user else "en"
         ludo_player.move_options = {
-            idx: self._describe_token(token, locale) for idx, token in moveable
+            idx: self._describe_token(token, locale, ludo_player) for idx, token in moveable
         }
         if user:
             user.speak_l("ludo-select-token", buffer="game")
@@ -810,7 +880,7 @@ class LudoGame(Game):
                 )
             )
             for token in p.tokens:
-                lines.append(self._describe_token(token, locale))
+                lines.append(self._describe_token(token, locale, p))
         if self.last_roll > 0:
             lines.append(Localization.get(locale, "ludo-last-roll", roll=self.last_roll))
 
@@ -824,12 +894,13 @@ class LudoGame(Game):
         if token.state == "yard":
             token.state = "track"
             token.position = self._get_start_position(player)
-            self.broadcast_l(
+            self._announce_player_event(
+                player,
+                "ludo-you-enter-board",
                 "ludo-enter-board",
-                buffer="game",
-                player=player.name,
-                color=player.color,
                 token=token.token_number,
+                position=token.position,
+                safe=self._safe_square_arm(token.position, player),
             )
             self._check_capture(player, token)
             return
@@ -844,11 +915,10 @@ class LudoGame(Game):
                 else:
                     token.state = "home_column"
                     token.position = overshoot
-                    self.broadcast_l(
+                    self._announce_player_event(
+                        player,
+                        "ludo-you-enter-home",
                         "ludo-enter-home",
-                        buffer="game",
-                        player=player.name,
-                        color=player.color,
                         token=token.token_number,
                     )
                     self.play_sound(
@@ -857,13 +927,13 @@ class LudoGame(Game):
                 return
 
             token.position = ((new_pos - 1) % TRACK_LENGTH) + 1
-            self.broadcast_l(
+            self._announce_player_event(
+                player,
+                "ludo-you-move-track",
                 "ludo-move-track",
-                buffer="game",
-                player=player.name,
-                color=player.color,
                 token=token.token_number,
                 position=token.position,
+                safe=self._safe_square_arm(token.position, player),
             )
             self.play_sound(
                 f"game_squares/token{random.randint(1, NUM_TOKEN_SOUNDS)}.ogg"  # nosec B311
@@ -876,11 +946,10 @@ class LudoGame(Game):
             if token.position >= HOME_COLUMN_LENGTH:
                 self._finish_token(player, token)
             else:
-                self.broadcast_l(
+                self._announce_player_event(
+                    player,
+                    "ludo-you-move-home",
                     "ludo-move-home",
-                    buffer="game",
-                    player=player.name,
-                    color=player.color,
                     token=token.token_number,
                     position=token.position,
                     total=HOME_COLUMN_LENGTH,
@@ -894,31 +963,24 @@ class LudoGame(Game):
         token.position = HOME_COLUMN_LENGTH
         player.finished_count += 1
         self._team_manager.add_to_team_score(player.name, 1)
-        self.broadcast_l(
+        self._announce_player_event(
+            player,
+            "ludo-you-home-finish",
             "ludo-home-finish",
-            buffer="game",
-            player=player.name,
-            color=player.color,
             token=token.token_number,
             finished=player.finished_count,
         )
         self.play_sound("game_pig/win.ogg")
 
     def _after_move(self, player: LudoPlayer) -> None:
-        if player.finished_count >= 4:
-            self.play_sound("game_pig/wingame.ogg")
-            self.broadcast_l("ludo-winner", buffer="game", player=player.name, color=player.color)
-            self.finish_game()
-            return
-
         if self.last_roll == 6:
             self.consecutive_sixes += 1
             max_sixes = self.options.max_consecutive_sixes
             if max_sixes > 0 and self.consecutive_sixes >= max_sixes:
-                self.broadcast_l(
+                self._announce_player_event(
+                    player,
+                    "ludo-you-too-many-sixes",
                     "ludo-too-many-sixes",
-                    buffer="game",
-                    player=player.name,
                     count=self.consecutive_sixes,
                 )
                 if self.turn_start_state:
@@ -928,6 +990,13 @@ class LudoGame(Game):
                 self._end_turn()
                 return
 
+        if player.finished_count >= 4:
+            self.play_sound("game_pig/wingame.ogg")
+            self._announce_player_event(player, "ludo-you-winner", "ludo-winner")
+            self.finish_game()
+            return
+
+        if self.last_roll == 6:
             self.broadcast_personal_l(
                 player,
                 "ludo-you-extra-turn",

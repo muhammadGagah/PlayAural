@@ -10,20 +10,75 @@ ludo-roll = { $player } rolls a { $roll }.
 ludo-you-roll = You roll a { $roll }.
 ludo-no-moves = { $player } has no valid moves.
 ludo-you-no-moves = You have no valid moves.
-ludo-enter-board = { $player } ({ $color ->
-    [red] Red
-    [blue] Blue
-    [green] Green
-    [yellow] Yellow
-    *[other] { $color }
-}) enters token { $token } onto the board.
-ludo-move-track = { $player } ({ $color ->
-    [red] Red
-    [blue] Blue
-    [green] Green
-    [yellow] Yellow
-    *[other] { $color }
-}) moves token { $token } to position { $position }.
+ludo-you-enter-board =
+    { $brief ->
+        [yes] You enter token { $token } onto the board.
+       *[no] { $safe ->
+            [yes] You enter token { $token } onto position { $position }, which is a safe square.
+           *[no] You enter token { $token } onto position { $position }.
+        }
+    }
+ludo-enter-board =
+    { $brief ->
+        [yes] { $player } ({ $color ->
+            [red] Red
+            [blue] Blue
+            [green] Green
+            [yellow] Yellow
+           *[other] { $color }
+        }) enters token { $token } onto the board.
+       *[no] { $safe ->
+            [yes] { $player } ({ $color ->
+                [red] Red
+                [blue] Blue
+                [green] Green
+                [yellow] Yellow
+               *[other] { $color }
+            }) enters token { $token } onto position { $position }, which is a safe square.
+           *[no] { $player } ({ $color ->
+                [red] Red
+                [blue] Blue
+                [green] Green
+                [yellow] Yellow
+               *[other] { $color }
+            }) enters token { $token } onto position { $position }.
+        }
+    }
+ludo-you-move-track =
+    { $brief ->
+        [yes] You move token { $token } around the track.
+       *[no] { $safe ->
+            [yes] You move token { $token } to position { $position }, which is a safe square.
+           *[no] You move token { $token } to position { $position }.
+        }
+    }
+ludo-move-track =
+    { $brief ->
+        [yes] { $player } ({ $color ->
+            [red] Red
+            [blue] Blue
+            [green] Green
+            [yellow] Yellow
+           *[other] { $color }
+        }) moves token { $token } around the track.
+       *[no] { $safe ->
+            [yes] { $player } ({ $color ->
+                [red] Red
+                [blue] Blue
+                [green] Green
+                [yellow] Yellow
+               *[other] { $color }
+            }) moves token { $token } to position { $position }, which is a safe square.
+           *[no] { $player } ({ $color ->
+                [red] Red
+                [blue] Blue
+                [green] Green
+                [yellow] Yellow
+               *[other] { $color }
+            }) moves token { $token } to position { $position }.
+        }
+    }
+ludo-you-enter-home = You move token { $token } into your home column.
 ludo-enter-home = { $player } ({ $color ->
     [red] Red
     [blue] Blue
@@ -31,6 +86,7 @@ ludo-enter-home = { $player } ({ $color ->
     [yellow] Yellow
     *[other] { $color }
 }) moves token { $token } into the home column.
+ludo-you-home-finish = Your token { $token } reaches home. ({ $finished }/4 finished)
 ludo-home-finish = { $player } ({ $color ->
     [red] Red
     [blue] Blue
@@ -38,13 +94,54 @@ ludo-home-finish = { $player } ({ $color ->
     [yellow] Yellow
     *[other] { $color }
 }) token { $token } reaches home. ({ $finished }/4 finished)
-ludo-move-home = { $player } ({ $color ->
+ludo-you-move-home =
+    { $brief ->
+        [yes] You move token { $token } in your home column.
+       *[no] You move token { $token } in your home column ({ $position }/{ $total }).
+    }
+ludo-move-home =
+    { $brief ->
+        [yes] { $player } ({ $color ->
+            [red] Red
+            [blue] Blue
+            [green] Green
+            [yellow] Yellow
+           *[other] { $color }
+        }) moves token { $token } in the home column.
+       *[no] { $player } ({ $color ->
+            [red] Red
+            [blue] Blue
+            [green] Green
+            [yellow] Yellow
+           *[other] { $color }
+        }) moves token { $token } in the home column ({ $position }/{ $total }).
+    }
+ludo-you-capture = You capture { $count ->
+    [one] 1 token
+   *[other] { $count } tokens
+} of { $captured_player } ({ $captured_color ->
+    [red] Red
+    [blue] Blue
+    [green] Green
+    [yellow] Yellow
+    *[other] { $captured_color }
+}) and send { $count ->
+    [one] it
+   *[other] them
+} back to yard.
+ludo-your-token-captured = { $player } ({ $color ->
     [red] Red
     [blue] Blue
     [green] Green
     [yellow] Yellow
     *[other] { $color }
-}) moves token { $token } in home column ({ $position }/{ $total }).
+}) captures { $count ->
+    [one] your token
+   *[other] { $count } of your tokens
+} and sends { $count ->
+    [one] it
+   *[other] them
+} back to yard.
 ludo-captures = { $player } ({ $color ->
     [red] Red
     [blue] Blue
@@ -63,7 +160,9 @@ ludo-captures = { $player } ({ $color ->
 }). Sent back to yard.
 ludo-extra-turn = { $player } rolled a 6. Extra turn.
 ludo-you-extra-turn = You rolled a 6. Extra turn.
+ludo-you-too-many-sixes = You rolled { $count } sixes in a row. Your moves from this turn sequence are undone, and your turn ends.
 ludo-too-many-sixes = { $player } rolled { $count } sixes in a row. Moves undone. Turn ends.
+ludo-you-winner = You win! All 4 tokens are home.
 ludo-winner = { $player } ({ $color ->
     [red] Red
     [blue] Blue
@@ -84,7 +183,11 @@ ludo-board-player = { $player } ({ $color ->
     *[other] { $color }
 }): { $finished }/4 finished
 ludo-token-yard = Token { $token } (yard)
-ludo-token-track = Token { $token } (position { $position })
+ludo-token-track =
+    { $safe ->
+        [yes] Token { $token } (position { $position }, safe square)
+       *[no] Token { $token } (position { $position })
+    }
 ludo-token-home = Token { $token } (home column { $position }/{ $total })
 ludo-token-finished = Token { $token } (finished)
 ludo-last-roll = Last roll: { $roll }
