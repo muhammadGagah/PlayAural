@@ -395,7 +395,11 @@ class TwentyOneGame(ActionGuardMixin, Game):
         return None
 
     def _is_turn_action_hidden(self, player: Player) -> Visibility:
-        return self.turn_action_visibility(player, extra_condition=self.phase == "turns")
+        return self.turn_action_visibility(
+            player,
+            require_current_player=False,
+            extra_condition=self.phase == "turns",
+        )
 
     def _is_hit_enabled(self, player: Player) -> str | None:
         error = self._is_turn_action_enabled(player)
@@ -404,8 +408,6 @@ class TwentyOneGame(ActionGuardMixin, Game):
         p = player if isinstance(player, TwentyOnePlayer) else None
         if not p:
             return "action-not-available"
-        if self._draws_locked_for(p):
-            return "twentyone-draw-locked"
         if not self.deck or self.deck.is_empty():
             return "twentyone-deck-empty-must-stand"
         return None
@@ -813,11 +815,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
 
         if self._draws_locked_for(p):
             self._play_sound_for_player(p, SOUND_ACTION_FAIL)
-            self._broadcast_personal_l(
-                p,
-                "twentyone-you-cannot-draw-cards",
-                "twentyone-player-cannot-draw-cards",
-            )
+            self._announce_draw_locked(p)
             self.rebuild_all_menus()
             return
 
@@ -2004,11 +2002,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
         ):
             if self._draws_locked_for(player):
                 self._play_sound_for_player(player, SOUND_ACTION_FAIL)
-                self._broadcast_personal_l(
-                    player,
-                    "twentyone-you-cannot-draw-cards",
-                    "twentyone-player-cannot-draw-cards",
-                )
+                self._announce_draw_locked(player)
                 return
             rank = int(modifier.split("_")[1])
             card = self._draw_specific_rank(rank)
@@ -2106,11 +2100,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
             self._discard_random_modifiers(player, 1, announce_sound=True)
             if self._draws_locked_for(opponent):
                 self._play_sound_for_player(player, SOUND_ACTION_FAIL)
-                self._broadcast_personal_l(
-                    opponent,
-                    "twentyone-you-cannot-draw-cards",
-                    "twentyone-player-cannot-draw-cards",
-                )
+                self._announce_draw_locked(opponent)
                 return
             card = self._draw_highest_card()
             if card:
@@ -2144,11 +2134,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
             self._discard_random_modifiers(player, discard_count, announce_sound=True)
             if self._draws_locked_for(player):
                 self._play_sound_for_player(player, SOUND_ACTION_FAIL)
-                self._broadcast_personal_l(
-                    player,
-                    "twentyone-you-cannot-draw-cards",
-                    "twentyone-player-cannot-draw-cards",
-                )
+                self._announce_draw_locked(player)
                 return
             card = self._draw_best_possible_card(player)
             if card:
@@ -2240,11 +2226,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
         if modifier == MODIFIER_PRECISION_DRAW:
             if self._draws_locked_for(player):
                 self._play_sound_for_player(player, SOUND_ACTION_FAIL)
-                self._broadcast_personal_l(
-                    player,
-                    "twentyone-you-cannot-draw-cards",
-                    "twentyone-player-cannot-draw-cards",
-                )
+                self._announce_draw_locked(player)
                 return
             card = self._draw_best_possible_card(player)
             if card:
@@ -2271,11 +2253,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
             self._place_table_effect(player, modifier)
             if self._draws_locked_for(player):
                 self._play_sound_for_player(player, SOUND_ACTION_FAIL)
-                self._broadcast_personal_l(
-                    player,
-                    "twentyone-you-cannot-draw-cards",
-                    "twentyone-player-cannot-draw-cards",
-                )
+                self._announce_draw_locked(player)
                 return
             card = self._draw_best_possible_card(player)
             if card:
@@ -2303,11 +2281,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
         if modifier == MODIFIER_PRIME_DRAW:
             if self._draws_locked_for(player):
                 self._play_sound_for_player(player, SOUND_ACTION_FAIL)
-                self._broadcast_personal_l(
-                    player,
-                    "twentyone-you-cannot-draw-cards",
-                    "twentyone-player-cannot-draw-cards",
-                )
+                self._announce_draw_locked(player)
                 return
             card = self._draw_best_possible_card(player)
             if card:
@@ -2340,11 +2314,7 @@ class TwentyOneGame(ActionGuardMixin, Game):
         if modifier == MODIFIER_AID_RIVAL:
             if self._draws_locked_for(opponent):
                 self._play_sound_for_player(player, SOUND_ACTION_FAIL)
-                self._broadcast_personal_l(
-                    opponent,
-                    "twentyone-you-cannot-draw-cards",
-                    "twentyone-player-cannot-draw-cards",
-                )
+                self._announce_draw_locked(opponent)
                 return
             card = self._draw_best_possible_card(opponent)
             if card:
@@ -2623,13 +2593,28 @@ class TwentyOneGame(ActionGuardMixin, Game):
             return None
         return player.table_modifiers.pop()
 
-    def _draws_locked_for(self, player: TwentyOnePlayer) -> bool:
+    def _draw_lock_effect_for(self, player: TwentyOnePlayer) -> str | None:
         opponent = self._opponent_of(player)
         if not opponent:
-            return False
-        return (
-            MODIFIER_DRAW_SILENCE in opponent.table_modifiers
-            or MODIFIER_ALL_IN_SILENCE in opponent.table_modifiers
+            return None
+        if MODIFIER_ALL_IN_SILENCE in opponent.table_modifiers:
+            return MODIFIER_ALL_IN_SILENCE
+        if MODIFIER_DRAW_SILENCE in opponent.table_modifiers:
+            return MODIFIER_DRAW_SILENCE
+        return None
+
+    def _draws_locked_for(self, player: TwentyOnePlayer) -> bool:
+        return self._draw_lock_effect_for(player) is not None
+
+    def _announce_draw_locked(self, player: TwentyOnePlayer) -> None:
+        effect = self._draw_lock_effect_for(player)
+        if not effect:
+            return
+        self._broadcast_personal_l_with_locale_args(
+            player,
+            "twentyone-you-cannot-draw-effect",
+            "twentyone-player-cannot-draw-effect",
+            lambda locale: {"effect": self._render_modifier(locale, effect)},
         )
 
     def _remove_guard_effects(self, player: TwentyOnePlayer, *, limit: int) -> int:

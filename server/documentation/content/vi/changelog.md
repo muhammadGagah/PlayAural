@@ -1,5 +1,61 @@
 Nhật ký thay đổi
 
+Thứ Ba 9 Tháng Sáu 2026
+
+Cập nhật máy chủ:
+
+Đã thêm nhiều trò chơi mới: Kỷ Nguyên Anh Hùng, Ống Sắt, Nine, Senet, Cards Against Humanity và 21 (Luật Sinh Tồn). Cards Against Humanity đã có giao diện và tài liệu tiếng Việt, nhưng nội dung câu hỏi và lá trả lời hiện vẫn chỉ hỗ trợ tiếng Anh.
+
+Đã thêm UNO để thay thế Lá bài cuối. UNO hiện đang ở giai đoạn beta/thử nghiệm, và tài liệu hướng dẫn của trò chơi này hiện chưa có. Tài liệu sẽ được bổ sung sau; các trò chơi mới còn lại trong bản cập nhật này đã có tài liệu và sẵn sàng để chơi bình thường.
+
+Đã thêm bộ lọc danh mục vào menu Chơi, giúp bạn tìm trò chơi theo thể loại dễ hơn.
+
+Đã sắp xếp lại khu vực Tùy chỉnh thành hai phần rõ ràng hơn: Tùy chỉnh chung và Tùy chỉnh trò chơi. Tùy chỉnh trò chơi giờ đây hỗ trợ thiết lập riêng cho từng trò, mô tả dễ hiểu hơn, cùng các tùy chọn an toàn như Xác nhận hành động rủi ro và Thông báo ngắn gọn.
+
+Đã thêm thiết lập Âm lượng hiệu ứng bên cạnh Âm lượng nhạc, Âm lượng môi trường và Âm lượng trò chuyện thoại. Các mục âm lượng giờ đây dùng menu chọn theo từng nấc cố định thay vì bắt bạn tự nhập số.
+
+Đã tinh chỉnh nhiều trò chơi hiện có để luật chơi rõ ràng hơn, menu dễ dùng hơn và thông báo bằng giọng nói tự nhiên hơn. Scopa, Blackjack, Chín mươi chín, Đường Đua Nghìn Dặm, Đô-mi-nô, 21 (Luật Sinh Tồn), Tiến Lên, Pusoy Dos, Poker Rút năm lá, Poker Texas Hold'em, Cờ cá ngựa, Sorry!, Cờ thỏ cáo và Thành Phố Trung Cổ đều có cải thiện trực tiếp cho người chơi.
+
+Blackjack giờ đây bỏ qua đúng những người đã hết chip, dùng từ chip thống nhất trong toàn bộ trò chơi, khóa cược ngay khi bạn xác nhận, và cho nhà cái rút bài từng lá với khoảng nghỉ ngắn để thông báo không bị dồn dập.
+
+Chín mươi chín giờ đây loại hẳn người chơi đã bị loại khỏi các lượt chia bài sau đó, chọn ngẫu nhiên người đi đầu mỗi vòng mới, chờ một chút giữa các vòng để mọi người kịp theo dõi, khôi phục menu đúng ngôn ngữ sau khi kết nối lại, và sửa lỗi hiếm khiến tổng điểm nhảy sang những con số vô lý.
+
+Poker Tử Thần giờ đây tính đúng chiến thắng khi thắng ở phần so bài, có thông báo rõ ràng hơn khi hòa, cho đổi bài một lần mỗi ván bài, chặn Tất tay ở vòng cược đầu tiên, và nâng cấp người máy để chơi khó đoán hơn.
+
+Đường Đua Nghìn Dặm giờ đây nhận đúng Cú chơi phản đòn khi bạn đánh lá an toàn tương ứng theo cách thông thường trong khung phản ứng. Khi một lá bài chưa thể đánh được, trò chơi sẽ giải thích cụ thể lý do và cho bạn chọn bỏ bài hoặc hủy.
+
+Đô-mi-nô giờ đây giữ ổn định các nhánh của quân xoay và cho đúng người mở vòng tự chọn quân mở đầu thay vì tự động đánh hộ.
+
+Tiến Lên giờ đây bám sát luật miền Nam và miền Bắc hơn, bao gồm việc tiếp tục chơi để xác định hạng còn lại, các điều kiện tới trắng miền Nam, luật chặt, thuật ngữ bài miền Nam và cách tính điểm bằng xu ảo.
+
+Pusoy Dos đã được cải thiện phần kiểm tra luật, thông báo tiếng Việt, quyết định của người máy và xác nhận an toàn khi bạn chuẩn bị bỏ lượt.
+
+Poker Rút năm lá và Poker Texas Hold'em giờ đây luôn giữ các hành động thông tin quan trọng, như đọc bài trên tay hoặc xem độ mạnh của bài, trong menu cảm ứng suốt cả ván bài.
+
+Cờ cá ngựa và Sorry! giờ đây tôn trọng tùy chọn Thông báo ngắn gọn của từng người, đọc nước đi rõ hơn, và đưa tiêu điểm trình đọc màn hình đến đúng hành động hoặc lựa chọn tiếp theo sau khi bạn tung xúc xắc, rút bài hoặc chọn nước đi.
+
+Đã cải thiện độ ổn định của menu cảm ứng trong nhiều trò chơi. Các nút hành động chính được giữ lại làm điểm bám cho con trỏ, nhưng nếu bạn bấm khi chưa thể dùng, trò chơi sẽ đọc rõ lý do thay vì im lặng.
+
+Đã cải thiện phản hồi âm thanh trên toàn nền tảng. Âm thanh báo lượt ổn định hơn, Crazy Eights đã có lại âm thanh khi khán giả vào hoặc rời bàn, âm thanh vào/rời bàn cũng phát đúng khi người chơi bị đuổi hoặc bị cấm, và Cards Against Humanity đã sử dụng bộ hiệu ứng âm thanh riêng.
+
+Đã tăng độ an toàn cho tên người máy. Người chơi thật không thể đăng ký hoặc dùng tên dành riêng cho người máy, và người máy cũng không thể giả mạo tên người chơi thật trong cùng một bàn.
+
+Cập nhật ứng dụng di động:
+
+Khi tắt chế độ tự đọc, ứng dụng di động giờ đây dùng các thẻ điều hướng ở phía trên cho Màn hình chính, Trò chuyện, Nhật ký và Phím tắt, gần giống hơn với phiên bản web. Thẻ Trò chuyện đưa tiêu điểm vào ô nhập, thẻ Nhật ký đưa tới mục mới nhất, thẻ Phím tắt đưa tới phím tắt đầu tiên, còn thẻ Màn hình chính ghi nhớ vị trí menu trò chơi trước đó.
+
+Các thông tin như loại ứng dụng và thời gian bản dựng giờ đây được đưa xuống cuối thứ tự đọc của trình đọc màn hình, thay vì nằm trước nội dung trò chơi chính.
+
+Âm thanh khi di chuyển trong menu giờ đây khớp với phần mềm trên máy tính, bao gồm cả các âm thanh riêng của từng trò như âm thanh ô bàn trong Cờ thỏ cáo.
+
+Cập nhật phiên bản web:
+
+Menu trên web giờ đây phát đúng âm thanh riêng của từng mục, giúp người chơi web nghe được cùng các tín hiệu âm thanh theo ngữ cảnh như trên phần mềm máy tính và ứng dụng di động.
+
+Cập nhật phần mềm trên máy tính:
+
+Đã cải thiện cách xử lý phím tắt cho các trò chơi dạng lưới và bàn cờ mới, bao gồm Cờ thỏ cáo và Senet, để các phím điều hướng được ghi trong tài liệu hoạt động ổn định hơn.
+
 Thứ Ba 5 Tháng Năm 2026
 
 Cập nhật máy chủ:
@@ -28,9 +84,9 @@ Thứ Bảy 2 Tháng Năm 2026
 
 Cập nhật máy chủ:
 
-Đã cải thiện tính năng xem điểm chỉn chu và rõ ràng hơn. Thay vì dùng chung một từ ngữ cho mọi trò chơi, hệ thống giờ đây sẽ đọc chính xác loại điểm đặc trưng của từng trò (ví dụ như trong trò Mile by Mile hay Cờ thỏ cáo) và được đọc rành mạch theo từng người chơi hoặc từng đội.
+Đã cải thiện tính năng xem điểm chỉn chu và rõ ràng hơn. Thay vì dùng chung một từ ngữ cho mọi trò chơi, hệ thống giờ đây sẽ đọc chính xác loại điểm đặc trưng của từng trò (ví dụ như trong trò Đường Đua Nghìn Dặm hay Cờ thỏ cáo) và được đọc rành mạch theo từng người chơi hoặc từng đội.
 
-Đã thêm tính năng sắp xếp đội hình dành cho chủ phòng. Trong các trò chơi hỗ trợ đánh theo đội (như Dominos, Mile by Mile, Pig và Scopa), chủ phòng giờ đây có thể tự do thay đổi và chọn thành viên cho từng đội trước khi bắt đầu ván đấu.
+Đã thêm tính năng sắp xếp đội hình dành cho chủ phòng. Trong các trò chơi hỗ trợ đánh theo đội (như Đô-mi-nô, Đường Đua Nghìn Dặm, Pig và Scopa), chủ phòng giờ đây có thể tự do thay đổi và chọn thành viên cho từng đội trước khi bắt đầu ván đấu.
 
 Đã sửa lỗi hiển thị tên khi kiểm tra điểm. Nếu có người chơi bị ngắt kết nối hoặc rời bàn và bot vào đánh thay, bảng điểm giờ đây sẽ hiển thị đúng tên của bot đang chơi thay vì hiển thị tên của người chơi đã tạm rời đi.
 
@@ -86,13 +142,13 @@ Cập nhật máy chủ:
 
 Cập nhật phần mềm trên máy tính:
 
-Đã tối ưu hóa mã nguồn giao diện của trò chơi. Nâng cấp này giúp phần mềm hoạt động trơn tru hơn ở hệ thống nền mà hoàn toàn không làm thay đổi trải nghiệm hay thói quen sử dụng của bạn.
+Đã cải thiện độ mượt của giao diện trò chơi trên phần mềm máy tính. Cách sử dụng vẫn giữ nguyên, nhưng các thao tác trong game ổn định hơn.
 
 Cập nhật ứng dụng di động:
 
 Đã sửa lỗi tính năng kiểm tra độ trễ mạng không hiển thị kết quả khi bạn tắt chế độ tự phát giọng nói.
 
-Đã sửa lỗi không thể bỏ bài trong trò chơi Mile by Mile. Giờ đây bạn có thể thao tác bỏ bài bằng cử chỉ nhấn giữ của trình đọc màn hình (thông thường là chạm đúp và giữ bằng một ngón tay).
+Đã sửa lỗi không thể bỏ bài trong trò chơi Đường Đua Nghìn Dặm. Giờ đây bạn có thể thao tác bỏ bài bằng cử chỉ nhấn giữ của trình đọc màn hình (thông thường là chạm đúp và giữ bằng một ngón tay).
 
 Đã cải thiện khả năng tự động nhận diện ngôn ngữ của thiết bị mượt mà hơn trong lần đầu tiên bạn mở ứng dụng.
 
@@ -108,9 +164,9 @@ Cập nhật máy chủ:
 
 Đã sửa lỗi âm thanh môi trường và nhạc nền của bàn chơi trước vẫn tiếp tục phát sau khi bạn đã chuyển sang một bàn chơi mới.
 
-Đã thêm tùy chọn Hủy vào các lá bài yêu cầu đưa ra lựa chọn trong Bài 99. Ví dụ như khi bạn đánh lá 10 hoặc lá Át, giờ đây bạn có thể chọn hủy để đổi ý.
+Đã thêm tùy chọn Hủy vào các lá bài yêu cầu đưa ra lựa chọn trong Chín mươi chín. Ví dụ như khi bạn đánh lá 10 hoặc lá Át, giờ đây bạn có thể chọn hủy để đổi ý.
 
-Đã bổ sung thông báo nhắc nhở Chưa đến lượt của bạn nếu bạn thao tác nhầm lúc chưa tới lượt mình trong các trò chơi như Bài 99, Mile by Mile và Scopa.
+Đã bổ sung thông báo nhắc nhở Chưa đến lượt của bạn nếu bạn thao tác nhầm lúc chưa tới lượt mình trong các trò chơi như Chín mươi chín, Đường Đua Nghìn Dặm và Scopa.
 
 Cập nhật phần mềm trên máy tính:
 
@@ -198,13 +254,13 @@ Thứ Năm 9 Tháng Tư 2026
 
 Cập nhật máy chủ:
 
-Đã thêm trò chơi mới mang tên Color Game với đầy đủ tài liệu hướng dẫn chi tiết cho người mới bắt đầu. Trò chơi được hỗ trợ hoàn chỉnh bằng cả tiếng Việt và tiếng Anh.
+Đã thêm trò chơi mới mang tên Xúc xắc màu với đầy đủ tài liệu hướng dẫn chi tiết cho người mới bắt đầu. Trò chơi được hỗ trợ hoàn chỉnh bằng cả tiếng Việt và tiếng Anh.
 
 Cập nhật trò chơi Tiến Lên: Các lá bài trên tay giờ đây sẽ tự động được sắp xếp từ thấp đến cao để bạn dễ dàng chọn lựa. Hệ thống cũng sẽ thông báo chi tiết và rõ ràng hơn khi bạn đánh ra một nước bài không hợp lệ.
 
 Cập nhật trò chơi Pusoy Dos: Tương tự như Tiến Lên, các lá bài trên tay cũng sẽ được tự động sắp xếp từ thấp đến cao.
 
-Cập nhật Bài 99: Đã nâng cấp trí thông minh của người máy lên một chút để tăng tính thử thách, đồng thời tối ưu hóa mã nguồn bên trong giúp trò chơi chạy mượt mà hơn.
+Cập nhật Chín mươi chín: Người máy chơi hợp lý hơn và tạo thêm thử thách, giúp ván đấu có cảm giác tự nhiên hơn.
 
 Thứ Ba 7 Tháng Tư 2026
 
@@ -314,7 +370,7 @@ Thứ Tư 25 Tháng Ba 2026
 
 Chào mừng bạn đến với phiên bản đầu tiên của PlayAural. Đây là một nền tảng giải trí ưu tiên âm thanh, được thiết kế để hoàn toàn tiếp cận cho người mù.
 
-Đã thêm 25 trò chơi đa dạng thuộc nhiều nhóm trò chơi, bao gồm game bài như Bài 99, game xúc xắc, game chiến thuật như Tàu chiến, và game tương tác xã hội như Đảo chính.
+Đã thêm 25 trò chơi đa dạng thuộc nhiều nhóm trò chơi, bao gồm game bài như Chín mươi chín, game xúc xắc, game chiến thuật như Tàu chiến, và game tương tác xã hội như Đảo chính.
 
 Đã thêm phần mềm trên máy tính với độ trễ thấp và tương thích mượt mà với các trình đọc màn hình.
 
