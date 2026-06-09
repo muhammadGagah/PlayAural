@@ -1,5 +1,61 @@
 Changelog
 
+Tuesday 9 June 2026
+
+Server Updates:
+
+Added several new games: Age of Heroes, Metal Pipe, Nine, Senet, Cards Against Humanity, and 21 (Survival Rules). Cards Against Humanity has localized menus and documentation, but its question and answer cards currently remain in English.
+
+Added UNO as a replacement for Last Card. UNO is currently in beta/testing, and its documentation is not available yet. The documentation will be added later; the other newly added games in this update are documented and ready for regular play.
+
+Added a category filter to the Play menu, making it easier to browse games by type.
+
+Reworked the Options area into clearer General Options and Game Options sections. Game options now support per-game preference overrides, clearer descriptions, and safer prompts such as Confirm risky actions and Brief announcements.
+
+Added a Sound Effects Volume setting alongside Music, Ambience, and Voice Chat volume. Volume controls now use a simple selection menu with fixed levels instead of manual number entry.
+
+Polished many existing games with clearer rules, better prompts, and more natural announcements. Scopa, Blackjack, Ninety Nine, Mile by Mile, Dominos, 21, Tien Len, Pusoy Dos, Five Card Draw, Texas Hold'em, Ludo, Sorry!, Backgammon, and Citadels all received player-facing improvements.
+
+Blackjack now skips bankrupt players properly, uses chips consistently, locks bets immediately when confirmed, and spaces out the dealer's card draws so the announcements are easier to follow.
+
+Ninety Nine now excludes eliminated players from future dealing, starts each new round with a random first player, pauses briefly between rounds, restores localized menus correctly after reconnecting, and fixes the rare count overflow bug that could make the total jump to impossible numbers.
+
+Dead Man's Poker now tracks showdown wins correctly, handles ties with clearer draw announcements, allows card swaps once per hand, blocks first-round All-in actions, and has stronger bot strategy.
+
+Mile by Mile now recognizes a Dirty Trick when you play the correct safety card normally during the reaction window. Unplayable cards now explain exactly why they cannot be played and offer a clear discard or cancel choice.
+
+Dominos now keeps spinner branches stable and lets the correct opening player choose their opening tile instead of automatically playing one for them.
+
+Tien Len now follows Southern and Northern rule details more closely, including continued play for remaining places, Southern instant-win conditions, chopping rules, Southern Vietnamese card terminology, and a coin-based scoring flow.
+
+Pusoy Dos received rule validation, clearer localized messages, more accurate bot decisions, and safer handling for risky pass actions.
+
+Five Card Draw and Texas Hold'em now keep important information actions, such as reading your hand or checking hand strength, available on touch clients throughout the hand.
+
+Ludo and Sorry! now respect each player's Brief announcements preference, give clearer movement details, and keep screen reader focus routed to the next useful action or choice after direct roll, draw, or move interactions.
+
+Improved touch-client stability across many games by keeping primary actions visible as focus anchors while still speaking a clear error if the action is not currently allowed.
+
+Improved audio feedback across the platform. Turn sounds are more consistent, Crazy Eights once again plays spectator join and leave sounds, table join and leave sounds now also play for kicks and bans, and Cards Against Humanity now uses its dedicated sound effects.
+
+Improved bot name safety. Human players can no longer register or use names reserved for bots, and bots cannot impersonate human players at the same table.
+
+Mobile Client Updates:
+
+When self-voicing is turned off, the mobile client now uses top navigation tabs for Main, Chat, History, and Shortcuts, matching the web client more closely. Chat focuses the input box, History focuses the newest item, Shortcuts focuses the first shortcut, and the Main tab remembers the game menu position.
+
+Status details such as the client type and build time now appear at the bottom of the screen reader order instead of before the main game content.
+
+Menu highlight sounds now match the desktop client, including game-specific sounds such as Backgammon board squares.
+
+Web Client Updates:
+
+Web menus now honor per-item highlight sounds, giving web players the same game-specific menu audio cues as desktop and mobile players.
+
+Desktop Client Updates:
+
+Shortcut routing was improved for recently added grid and board games, including Backgammon and Senet, so documented navigation shortcuts behave more reliably.
+
 Tuesday 5 May 2026
 
 Server Updates:
@@ -17,8 +73,6 @@ Desktop Client Updates:
 Integrated the new Voice Chat Volume control directly into the desktop client's audio Options dialog.
 
 Mobile Client Updates:
-
-Voice chat audio is no longer routed through the device's phone call volume. It now uses the standard media volume stream, ensuring that the game's stereo sound effects continue playing in high quality while you are chatting.
 
 Web Client Updates:
 
@@ -158,7 +212,7 @@ Server Updates:
 
 Rebalanced the gameplay in Chaos Bear to make matches fairer and more engaging.
 
-Battle game updates: Fixed a rare bug that could cause the game to freeze. Added sound effects for when a fighter is destroyed and when a player is eliminated. Added an sound effect for the overall match victory.
+Battle game updates: Fixed a rare bug that could cause the game to freeze. Added sound effects for when a fighter is destroyed and when a player is eliminated. Added a sound effect for the overall match victory.
 
 Added detailed skill descriptions directly inside the skill menu for Battle. You can now learn exactly what an ability does right in the middle of the game without needing to read the documentation.
 
@@ -240,7 +294,7 @@ Safe table switching: Joining a new table while currently in a game now triggers
 
 Enhanced system reliability: Added extra safety checks for private table visibility and table switching to prevent errors.
 
-Resolved a technical background issue to ensure the platform runs more reliably across various Windows environments.
+Improved Windows reliability so the platform starts and runs more consistently across different setups.
 
 Wednesday 1 April 2026
 
