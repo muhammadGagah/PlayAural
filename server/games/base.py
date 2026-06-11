@@ -138,6 +138,14 @@ class Game(
         ] = {}  # player_id -> context during action execution
         self._status_box_open: set[str] = set()  # player_ids with status box open
         self._actions_menu_open: set[str] = set()  # player_ids with actions menu open
+        # Menu focus intent (runtime-only): player_id -> item id to land on at
+        # the next full-table rebuild. Set via request_menu_focus(); consumed
+        # exactly once by rebuild_all_menus().
+        self._pending_menu_focus: dict[str, str] = {}
+        # When True, the next no-focus rebuild_all_menus() becomes a
+        # focus-preserving update_all_menus(). Set via
+        # defer_next_rebuild_to_update(); consumed exactly once.
+        self._next_full_rebuild_is_update: bool = False
         # Runtime-only options navigation stack for multi-select options
         # (player_id -> list of path segments). Transient lobby state; not
         # serialized, so it safely resets to top-level on reconnect/restore.
