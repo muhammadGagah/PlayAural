@@ -44,7 +44,7 @@ Sau khi tất cả người chơi đã di chuyển, con gấu sẽ đi. Gấu gi
 
 
 
-Năng lượng của gấu bắt đầu ở mức 1 và không bao giờ xuống dưới 1. Nếu vị trí mới của gấu bằng hoặc vượt qua vị trí của bất kỳ người chơi nào, những người đó sẽ bị bắt và loại khỏi trò chơi. Khi gấu bắt được người chơi, nó sẽ mất 3 năng lượng (tối thiểu về 1) sau khi xơi tái con mồi.
+Năng lượng của gấu bắt đầu ở mức 1 và không bao giờ xuống dưới 1. Nếu vị trí mới của gấu bằng hoặc vượt qua vị trí của bất kỳ người chơi nào, những người đó sẽ bị bắt và loại khỏi trò chơi. Khi gấu bắt được người chơi, nó sẽ mất 3 năng lượng (tối thiểu về 1) vì phải chậm lại.
 
 
 

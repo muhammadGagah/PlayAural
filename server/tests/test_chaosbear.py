@@ -6,6 +6,7 @@ import json
 from unittest.mock import patch
 
 from ..games.chaosbear.game import ChaosBearGame, ChaosBearPlayer
+from ..messages.localization import Localization
 from ..users.test_user import MockUser
 from ..users.bot import Bot
 
@@ -240,6 +241,8 @@ class TestChaosBearBalance:
         game.on_start()
         player1.position = 30
         game.bear_energy = 3
+        user1.clear_messages()
+        user2.clear_messages()
 
         with patch("server.games.chaosbear.game.random.randint") as mock_rand:
             mock_rand.side_effect = [1, 2, 1, 1]
@@ -249,6 +252,28 @@ class TestChaosBearBalance:
 
         assert player1.position == 33
         assert game.bear_energy == 2
+        assert (
+            Localization.get("en", "chaosbear-draw-card-you")
+            in user1.get_spoken_messages()
+        )
+        assert Localization.get(
+            "en", "chaosbear-draw-card-other", player="Alice"
+        ) in user2.get_spoken_messages()
+        assert Localization.get(
+            "en",
+            "chaosbear-card-tiredness-you",
+            position=33,
+            gap=33,
+            energy=2,
+        ) in user1.get_spoken_messages()
+        assert Localization.get(
+            "en",
+            "chaosbear-card-tiredness-other",
+            player="Alice",
+            position=33,
+            gap=33,
+            energy=2,
+        ) in user2.get_spoken_messages()
 
     def test_backward_push_cancels_draw_surge(self):
         """Backward push should cancel the surge instead of sending the player behind start."""
@@ -268,4 +293,143 @@ class TestChaosBearBalance:
         advance_ticks(game)
 
         assert player1.position == 30
+
+
+class TestChaosBearUx:
+    """Regression tests for Chaos Bear accessibility and messaging."""
+
+    def test_roll_and_move_use_personal_and_observer_messages(self):
+        game = ChaosBearGame()
+        user1 = MockUser("Alice")
+        user2 = MockUser("Bob")
+        player1 = game.add_player("Alice", user1)
+        game.add_player("Bob", user2)
+
+        game.on_start()
+        user1.clear_messages()
+        user2.clear_messages()
+
+        def deterministic_randint(low: int, high: int) -> int:
+            if (low, high) == (1, 6):
+                return 4
+            return low
+
+        with patch(
+            "server.games.chaosbear.game.random.randint",
+            side_effect=deterministic_randint,
+        ):
+            game._action_roll_dice(player1, "roll_dice")
+            advance_ticks(game, 40)
+
+        assert Localization.get(
+            "en", "chaosbear-roll-you", roll=4
+        ) in user1.get_spoken_messages()
+        assert Localization.get(
+            "en", "chaosbear-roll-other", player="Alice", roll=4
+        ) in user2.get_spoken_messages()
+        assert Localization.get(
+            "en", "chaosbear-position-you", position=34, gap=34
+        ) in user1.get_spoken_messages()
+        assert Localization.get(
+            "en",
+            "chaosbear-position-other",
+            player="Alice",
+            position=34,
+            gap=34,
+        ) in user2.get_spoken_messages()
+
+    def test_spectator_can_open_status_box(self):
+        game = ChaosBearGame()
+        user1 = MockUser("Alice")
+        user2 = MockUser("Bob")
+        watcher = MockUser("Watcher")
+        game.add_player("Alice", user1)
+        game.add_player("Bob", user2)
+        spectator = game.add_spectator("Watcher", watcher)
+
+        game.on_start()
+        watcher.clear_messages()
+
+        game._action_check_status(spectator, "check_status")
+
+        assert "status_box" in watcher.menus
+        lines = [item.text for item in watcher.menus["status_box"]["items"]]
+        assert lines[0] == Localization.get("en", "chaosbear-status-header")
+        assert any("Alice" in line for line in lines)
+        assert any("The bear" in line for line in lines)
+
+    def test_bear_turn_ignores_base_spectator_records(self):
+        game = ChaosBearGame()
+        user1 = MockUser("Alice")
+        user2 = MockUser("Bob")
+        watcher = MockUser("Watcher")
+        game.add_player("Alice", user1)
+        game.add_player("Bob", user2)
+        game.add_spectator("Watcher", watcher)
+
+        game.on_start()
+
+        game._bear_turn()
+
+        assert game.has_active_sequence(sequence_id="turn_flow") is True
+
+    def test_distance_tiebreak_result_records_winner_id(self):
+        game = ChaosBearGame()
+        user1 = MockUser("Alice")
+        user2 = MockUser("Bob")
+        player1 = game.add_player("Alice", user1)
+        player2 = game.add_player("Bob", user2)
+        game.on_start()
+        player1.alive = False
+        player1.position = 45
+        player2.alive = False
+        player2.position = 43
+        user1.clear_messages()
+        user2.clear_messages()
+
+        assert game._check_for_winner() is True
+
+        result = game.build_game_result()
+        assert result.custom_data["winner_name"] == "Alice"
+        assert result.custom_data["winner_ids"] == [player1.id]
+        assert result.custom_data["is_tie"] is False
+        assert Localization.get(
+            "en", "chaosbear-distance-winner-you", position=45
+        ) in user1.get_spoken_messages()
+        assert Localization.get(
+            "en",
+            "chaosbear-distance-winner-other",
+            player="Alice",
+            position=45,
+        ) in user2.get_spoken_messages()
+
+    def test_distance_tie_records_tied_players_without_winner(self):
+        game = ChaosBearGame()
+        user1 = MockUser("Alice")
+        user2 = MockUser("Bob")
+        player1 = game.add_player("Alice", user1)
+        player2 = game.add_player("Bob", user2)
+        game.on_start()
+        player1.alive = False
+        player1.position = 45
+        player2.alive = False
+        player2.position = 45
+        user1.clear_messages()
+        user2.clear_messages()
+
+        assert game._check_for_winner() is True
+
+        result = game.build_game_result()
+        assert result.custom_data["winner_name"] is None
+        assert result.custom_data["winner_ids"] == []
+        assert result.custom_data["is_tie"] is True
+        assert set(result.custom_data["tied_ids"]) == {player1.id, player2.id}
+        assert any(
+            message.startswith("You tie for the distance lead at square 45")
+            for message in user1.get_spoken_messages()
+        )
+        assert any(
+            message.startswith("You tie for the distance lead at square 45")
+            for message in user2.get_spoken_messages()
+        )
 

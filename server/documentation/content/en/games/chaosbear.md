@@ -44,7 +44,7 @@ After all surviving players have moved, the bear moves. The bear rolls a die (1 
 
 
 
-The bear's energy starts at 1 and never drops below 1. If the bear's new position is equal to or greater than any player's position, those players are eliminated. After catching players, the bear loses 3 energy (minimum 1) as it stops to eat.
+The bear's energy starts at 1 and never drops below 1. If the bear's new position is equal to or greater than any player's position, those players are eliminated. After catching players, the bear loses 3 energy (minimum 1) as it slows down.
 
 
 

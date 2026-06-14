@@ -40,7 +40,7 @@ class ChaosBearGame(Game):
     """
 
     players: list[ChaosBearPlayer] = field(default_factory=list)
-    
+
     # Game Logic State
     is_rolling: bool = False
 
@@ -50,6 +50,12 @@ class ChaosBearGame(Game):
     round_number: int = 0
     players_moved_this_round: int = 0
     round_start_seat: int = 0
+    winner_name: str | None = None
+    winner_ids: list[str] = field(default_factory=list)
+    winner_position: int = 0
+    is_tie: bool = False
+    tied_names: list[str] = field(default_factory=list)
+    tied_ids: list[str] = field(default_factory=list)
 
     @classmethod
     def get_name(cls) -> str:
@@ -83,7 +89,19 @@ class ChaosBearGame(Game):
 
     def _alive_players_in_seat_order(self) -> list[ChaosBearPlayer]:
         """Return alive players in their original table order."""
-        return [p for p in self.players if p.alive and not p.is_spectator]
+        return self._alive_runners()
+
+    def _active_runners(self) -> list[ChaosBearPlayer]:
+        """Return non-spectator Chaos Bear players."""
+        return [
+            p
+            for p in self.players
+            if isinstance(p, ChaosBearPlayer) and not p.is_spectator
+        ]
+
+    def _alive_runners(self) -> list[ChaosBearPlayer]:
+        """Return living runners in table order."""
+        return [p for p in self._active_runners() if p.alive]
 
     def _seat_index(self, player: ChaosBearPlayer) -> int:
         """Resolve the player's fixed seat index."""
@@ -115,9 +133,39 @@ class ChaosBearGame(Game):
         for offset in range(1, len(self.players) + 1):
             seat_index = (self.round_start_seat + offset) % len(self.players)
             seat_player = self.players[seat_index]
-            if seat_player.alive and not seat_player.is_spectator:
+            if (
+                isinstance(seat_player, ChaosBearPlayer)
+                and seat_player.alive
+                and not seat_player.is_spectator
+            ):
                 self.round_start_seat = seat_index
                 return
+
+    def _gap_to_bear(self, position: int) -> int:
+        """Return how many squares a position is ahead of the bear."""
+        return position - self.bear_position
+
+    def _speak_disabled_reason(self, player: Player, reason: str | None) -> None:
+        if not reason or reason == "action-not-available":
+            return
+        user = self.get_user(player)
+        if user:
+            user.speak_l(reason, buffer="game")
+
+    def _broadcast_runner_event(
+        self,
+        player: ChaosBearPlayer,
+        personal_message_id: str,
+        others_message_id: str,
+        **kwargs,
+    ) -> None:
+        self.broadcast_personal_l(
+            player,
+            personal_message_id,
+            others_message_id,
+            buffer="game",
+            **kwargs,
+        )
 
     # ==========================================================================
     # Action Sets
@@ -171,7 +219,12 @@ class ChaosBearGame(Game):
 
         # WEB-SPECIFIC: Reorder for Web Clients
         if self.is_touch_client(user):
-            target_order = ["check_status", "whose_turn", "whos_at_table"]
+            target_order = [
+                "check_status",
+                "check_scores",
+                "whose_turn",
+                "whos_at_table",
+            ]
             self._order_touch_standard_actions(action_set, target_order)
 
         return action_set
@@ -228,12 +281,13 @@ class ChaosBearGame(Game):
         """Check if roll dice action is enabled."""
         if self.status != "playing":
             return "action-not-playing"
+        if not isinstance(player, ChaosBearPlayer):
+            return "action-not-available"
         if self.current_player != player:
             return "action-not-your-turn"
-        if self.is_rolling:
-            return "action-game-in-progress"
-        cb_player: ChaosBearPlayer = player  # type: ignore
-        if not cb_player.alive:
+        if self.is_rolling or self.is_sequence_gameplay_locked():
+            return "chaosbear-action-in-progress"
+        if not player.alive:
             return "chaosbear-you-are-caught"
         return None
 
@@ -248,8 +302,7 @@ class ChaosBearGame(Game):
         """
         if self.status != "playing" or player.is_spectator:
             return Visibility.HIDDEN
-        cb_player: ChaosBearPlayer = player  # type: ignore
-        if not isinstance(cb_player, ChaosBearPlayer) or not cb_player.alive:
+        if not isinstance(player, ChaosBearPlayer) or not player.alive:
             return Visibility.HIDDEN
         return Visibility.VISIBLE
 
@@ -261,14 +314,15 @@ class ChaosBearGame(Game):
         """Check if draw card action is enabled."""
         if self.status != "playing":
             return "action-not-playing"
+        if not isinstance(player, ChaosBearPlayer):
+            return "action-not-available"
         if self.current_player != player:
             return "action-not-your-turn"
-        if self.is_rolling:
-            return "action-game-in-progress"
-        cb_player: ChaosBearPlayer = player  # type: ignore
-        if not cb_player.alive:
+        if self.is_rolling or self.is_sequence_gameplay_locked():
+            return "chaosbear-action-in-progress"
+        if not player.alive:
             return "chaosbear-you-are-caught"
-        can_draw = cb_player.position % 5 == 0 and cb_player.position > 0
+        can_draw = player.position % 5 == 0 and player.position > 0
         if not can_draw:
             return "chaosbear-not-on-multiple"
         return None
@@ -307,16 +361,22 @@ class ChaosBearGame(Game):
         self.cancel_all_sequences()
         self.round_number = 1
         self.players_moved_this_round = 0
+        self.winner_name = None
+        self.winner_ids = []
+        self.winner_position = 0
+        self.is_tie = False
+        self.tied_names = []
+        self.tied_ids = []
 
         # Set starting positions (fixed at 30 like v10)
         self.bear_position = 0
         self.bear_energy = 1
-        for player in self.get_active_players():
+        for player in self._active_runners():
             player.position = 30
             player.alive = True
 
         # Initialize turn order
-        alive_players = self.get_active_players()
+        alive_players = self._active_runners()
         if alive_players:
             self.round_start_seat = self._seat_index(alive_players[0])
         self.set_turn_players(self._build_round_turn_order())
@@ -351,7 +411,14 @@ class ChaosBearGame(Game):
             if user and user.preferences.play_turn_sound:
                 user.play_sound("game_squares/begin turn.ogg", volume=50)
 
-        self.broadcast_l("chaosbear-turn", buffer="game", player=player.name, position=player.position)
+        if isinstance(player, ChaosBearPlayer):
+            self._broadcast_runner_event(
+                player,
+                "chaosbear-turn-you",
+                "chaosbear-turn-other",
+                position=player.position,
+                gap=self._gap_to_bear(player.position),
+            )
 
     def on_sequence_callback(
         self,
@@ -364,14 +431,20 @@ class ChaosBearGame(Game):
         data = payload
         player_id = data.get("player_id")
         player = self.get_player_by_id(player_id) if player_id else None
-        
+
         if event_type == "move":
             if player:
                 new_pos = data["pos"]
                 # Only update if alive (might have been caught in rare race condition)
                 if isinstance(player, ChaosBearPlayer) and player.alive:
                     player.position = new_pos
-                    self.broadcast_l("chaosbear-position", buffer="game", player=player.name, position=new_pos)
+                    self._broadcast_runner_event(
+                        player,
+                        "chaosbear-position-you",
+                        "chaosbear-position-other",
+                        position=new_pos,
+                        gap=self._gap_to_bear(new_pos),
+                    )
 
         elif event_type == "card_effect":
             if player and isinstance(player, ChaosBearPlayer):
@@ -379,16 +452,33 @@ class ChaosBearGame(Game):
                     player.position = data["pos"]
                 if "energy" in data:
                     self.bear_energy = data["energy"]
-                msg_id = data.get("msg_id")
-                if msg_id:
-                    kwargs = data.get("kwargs", {})
-                    self.broadcast_l(msg_id, buffer="game", **kwargs)
+                personal_msg_id = data.get("personal_msg_id")
+                others_msg_id = data.get("others_msg_id")
+                kwargs = dict(data.get("kwargs") or {})
+                if personal_msg_id and others_msg_id:
+                    self._broadcast_runner_event(
+                        player,
+                        str(personal_msg_id),
+                        str(others_msg_id),
+                        **kwargs,
+                    )
+                else:
+                    msg_id = data.get("msg_id")
+                    kwargs = dict(data.get("kwargs") or {})
+                    if msg_id:
+                        self.broadcast_l(str(msg_id), buffer="game", **kwargs)
 
         elif event_type == "bear_roll_result":
             roll = data["roll"]
             energy = data["energy"]
             total = data["total"]
-            self.broadcast_l("chaosbear-bear-roll", buffer="game", roll=roll, energy=energy, total=total)
+            self.broadcast_l(
+                "chaosbear-bear-roll",
+                buffer="game",
+                roll=roll,
+                energy=energy,
+                total=total,
+            )
 
         elif event_type == "bear_energy_up":
             energy = data["energy"]
@@ -398,22 +488,34 @@ class ChaosBearGame(Game):
         elif event_type == "bear_move":
             new_pos = data["pos"]
             self.bear_position = new_pos
-            self.broadcast_l("chaosbear-bear-position", buffer="game", position=new_pos)
+            self.broadcast_l(
+                "chaosbear-bear-position", buffer="game", position=new_pos
+            )
 
         elif event_type == "bear_feast":
-             self.bear_energy = data["energy"]
-             self.broadcast_l("chaosbear-bear-feast", buffer="game")
+            self.bear_energy = data["energy"]
+            self.broadcast_l(
+                "chaosbear-bear-feast",
+                buffer="game",
+                energy=self.bear_energy,
+            )
 
         elif event_type == "player_caught":
-             if player and isinstance(player, ChaosBearPlayer):
-                 player.alive = False
-                 self.broadcast_l("chaosbear-player-caught", buffer="game", player=player.name)
+            if player and isinstance(player, ChaosBearPlayer):
+                player.alive = False
+                self._broadcast_runner_event(
+                    player,
+                    "chaosbear-you-caught",
+                    "chaosbear-player-caught",
+                    position=player.position,
+                    bear_position=self.bear_position,
+                )
 
         elif event_type == "next_round":
-             self._next_round_step()
+            self._next_round_step()
 
         elif event_type == "end_turn":
-             self.end_turn()
+            self.end_turn()
 
     def on_tick(self) -> None:
         """Called every game tick."""
@@ -492,13 +594,12 @@ class ChaosBearGame(Game):
         self.refresh_menus()
 
         # Check if any players are close - play warning
-        for player in self.players:
-            if player.alive and not player.is_spectator:
-                if player.position - self.bear_position <= 10:
-                    self.play_sound(
-                        f"game_chaosbear/bearwarn{random.randint(1, 2)}.ogg"
-                    )
-                    break
+        for player in self._alive_runners():
+            if player.position - self.bear_position <= 10:
+                self.play_sound(
+                    f"game_chaosbear/bearwarn{random.randint(1, 2)}.ogg"
+                )
+                break
 
         # Bear dice roll sounds (scheduled for timing)
         self.schedule_sound("game_chaosbear/beardice0.ogg", delay_ticks=10)
@@ -569,21 +670,20 @@ class ChaosBearGame(Game):
         kills = 0
         post_feast_energy = updated_energy
 
-        for player in self.players:
-            if player.alive and not player.is_spectator:
-                if projected_bear_pos >= player.position:
-                    beats.append(
-                        SequenceBeat(
-                            ops=[
-                                SequenceOperation.callback_op(
-                                    "player_caught",
-                                    {"player_id": player.id},
-                                )
-                            ],
-                            delay_after_ticks=30,
-                        )
+        for player in self._alive_runners():
+            if projected_bear_pos >= player.position:
+                beats.append(
+                    SequenceBeat(
+                        ops=[
+                            SequenceOperation.callback_op(
+                                "player_caught",
+                                {"player_id": player.id},
+                            )
+                        ],
+                        delay_after_ticks=30,
                     )
-                    kills += 1
+                )
+                kills += 1
 
         if kills > 0:
             post_feast_energy = max(1, updated_energy - 3)
@@ -631,7 +731,7 @@ class ChaosBearGame(Game):
 
     def _check_for_winner(self) -> bool:
         """Check if there's a winner."""
-        alive_players = [p for p in self.players if p.alive and not p.is_spectator]
+        alive_players = self._alive_runners()
 
         if len(alive_players) == 1:
             # One player left - they win!
@@ -640,43 +740,158 @@ class ChaosBearGame(Game):
             return True
         elif len(alive_players) == 0:
             # Everyone caught - furthest distance wins
-            all_players = [p for p in self.players if not p.is_spectator]
+            all_players = self._active_runners()
+            if not all_players:
+                return False
             max_pos = max(p.position for p in all_players)
             winners = [p for p in all_players if p.position == max_pos]
             if len(winners) > 1:
-                self._end_game_tie(max_pos)
+                self._end_game_tie(winners, max_pos)
             else:
-                self._end_game(winners[0])
+                self._end_game(winners[0], distance_tiebreak=True)
             return True
 
         return False
 
-    def _end_game(self, winner: ChaosBearPlayer) -> None:
+    def _end_game(
+        self, winner: ChaosBearPlayer, *, distance_tiebreak: bool = False
+    ) -> None:
         """End the game with a winner."""
-        self._winner_name = winner.name
-        self._winner_position = winner.position
-        self._is_tie = False
+        self.winner_name = winner.name
+        self.winner_ids = [winner.id]
+        self.winner_position = winner.position
+        self.is_tie = False
+        self.tied_names = []
+        self.tied_ids = []
+        self.is_rolling = False
 
         self.schedule_sound("game_chaosbear/wingame.ogg", delay_ticks=5)
-        self.broadcast_l(
-            "chaosbear-winner", buffer="game", player=winner.name, position=winner.position
-        )
+        if distance_tiebreak:
+            self._broadcast_runner_event(
+                winner,
+                "chaosbear-distance-winner-you",
+                "chaosbear-distance-winner-other",
+                position=winner.position,
+            )
+        else:
+            self._broadcast_runner_event(
+                winner,
+                "chaosbear-winner-you",
+                "chaosbear-winner-other",
+                position=winner.position,
+            )
 
         self.finish_game()
 
-    def _end_game_tie(self, position: int) -> None:
+    def _end_game_tie(self, winners: list[ChaosBearPlayer], position: int) -> None:
         """End the game with a tie."""
-        self._winner_name = None
-        self._winner_position = position
-        self._is_tie = True
+        self.winner_name = None
+        self.winner_ids = []
+        self.winner_position = position
+        self.is_tie = True
+        self.tied_names = [winner.name for winner in winners]
+        self.tied_ids = [winner.id for winner in winners]
+        self.is_rolling = False
 
-        self.broadcast_l("chaosbear-tie", buffer="game", position=position)
+        tied_ids = {winner.id for winner in winners}
+        for listener in self.players:
+            user = self.get_user(listener)
+            if not user:
+                continue
+            names = Localization.format_list_and(user.locale, self.tied_names)
+            if listener.id in tied_ids:
+                other_names = [
+                    winner.name for winner in winners if winner.id != listener.id
+                ]
+                if other_names:
+                    user.speak_l(
+                        "chaosbear-tie-you",
+                        buffer="game",
+                        position=position,
+                        players=Localization.format_list_and(
+                            user.locale, other_names
+                        ),
+                    )
+                else:
+                    user.speak_l(
+                        "chaosbear-tie",
+                        buffer="game",
+                        position=position,
+                        players=names,
+                    )
+            else:
+                user.speak_l(
+                    "chaosbear-tie",
+                    buffer="game",
+                    position=position,
+                    players=names,
+                )
 
         self.finish_game()
+
+    def _status_lines(self, locale: str) -> list[str]:
+        """Build localized status lines for the readable status box."""
+        lines = [
+            Localization.get(locale, "chaosbear-status-header"),
+            Localization.get(
+                locale, "chaosbear-status-round", round=self.round_number
+            ),
+        ]
+        current = self.current_player
+        if isinstance(current, ChaosBearPlayer) and current.alive:
+            lines.append(
+                Localization.get(
+                    locale,
+                    "chaosbear-status-turn",
+                    player=current.name,
+                    position=current.position,
+                    gap=self._gap_to_bear(current.position),
+                )
+            )
+        else:
+            lines.append(Localization.get(locale, "chaosbear-status-no-turn"))
+
+        active = sorted(
+            self._active_runners(), key=lambda p: (p.position, p.name), reverse=True
+        )
+        for runner in active:
+            if runner.alive:
+                lines.append(
+                    Localization.get(
+                        locale,
+                        "chaosbear-status-player-alive",
+                        player=runner.name,
+                        position=runner.position,
+                        gap=self._gap_to_bear(runner.position),
+                    )
+                )
+            else:
+                lines.append(
+                    Localization.get(
+                        locale,
+                        "chaosbear-status-player-caught",
+                        player=runner.name,
+                        position=runner.position,
+                    )
+                )
+
+        lines.append(
+            Localization.get(
+                locale,
+                "chaosbear-status-bear",
+                position=self.bear_position,
+                energy=self.bear_energy,
+            )
+        )
+        return lines
 
     def build_game_result(self) -> GameResult:
         """Build the game result with ChaosBear-specific data."""
-        all_players = [p for p in self.players if isinstance(p, ChaosBearPlayer) and not p.is_spectator]
+        all_players = [
+            p
+            for p in self.players
+            if isinstance(p, ChaosBearPlayer) and not p.is_spectator
+        ]
         sorted_players = sorted(all_players, key=lambda p: p.position, reverse=True)
 
         # Build final positions
@@ -685,10 +900,6 @@ class ChaosBearGame(Game):
         for p in sorted_players:
             final_positions[p.name] = p.position
             alive_status[p.name] = p.alive
-
-        winner_name = getattr(self, "_winner_name", None)
-        winner_position = getattr(self, "_winner_position", 0)
-        is_tie = getattr(self, "_is_tie", False)
 
         return GameResult(
             game_type=self.get_type(),
@@ -703,9 +914,12 @@ class ChaosBearGame(Game):
                 for p in sorted_players
             ],
             custom_data={
-                "winner_name": winner_name,
-                "winner_position": winner_position,
-                "is_tie": is_tie,
+                "winner_name": self.winner_name,
+                "winner_ids": self.winner_ids,
+                "winner_position": self.winner_position,
+                "is_tie": self.is_tie,
+                "tied_names": self.tied_names,
+                "tied_ids": self.tied_ids,
                 "final_positions": final_positions,
                 "alive_status": alive_status,
                 "bear_position": self.bear_position,
@@ -715,14 +929,18 @@ class ChaosBearGame(Game):
 
     def format_end_screen(self, result: GameResult, locale: str) -> list[str]:
         """Format the end screen for ChaosBear game."""
-        lines = [Localization.get(locale, "game-final-scores")]
+        lines = [Localization.get(locale, "chaosbear-final-positions")]
 
         final_positions = result.custom_data.get("final_positions", {})
         alive_status = result.custom_data.get("alive_status", {})
 
         for i, (name, position) in enumerate(final_positions.items(), 1):
             is_alive = alive_status.get(name, True)
-            status_key = "chaosbear-status-survived" if is_alive else "chaosbear-status-caught"
+            status_key = (
+                "chaosbear-status-survived"
+                if is_alive
+                else "chaosbear-status-caught"
+            )
             status_str = Localization.get(locale, status_key)
 
             line = Localization.get(
@@ -745,7 +963,9 @@ class ChaosBearGame(Game):
         """Roll dice to move forward."""
         if not isinstance(player, ChaosBearPlayer):
             return
-        if self.current_player != player or not player.alive:
+        reason = self._is_roll_dice_enabled(player)
+        if reason:
+            self._speak_disabled_reason(player, reason)
             return
 
         self.cancel_sequences_by_tag("turn_flow")
@@ -755,9 +975,14 @@ class ChaosBearGame(Game):
         self.play_sound("game_pig/roll.ogg")
 
         roll = random.randint(1, 6)
-        
+
         # Broadcast immediately
-        self.broadcast_l("chaosbear-roll", buffer="game", player=player.name, roll=roll)
+        self._broadcast_runner_event(
+            player,
+            "chaosbear-roll-you",
+            "chaosbear-roll-other",
+            roll=roll,
+        )
 
         # Schedule step sounds
         for i in range(roll):
@@ -796,24 +1021,29 @@ class ChaosBearGame(Game):
         """Draw a card for a special effect."""
         if not isinstance(player, ChaosBearPlayer):
             return
-        if self.current_player != player or not player.alive:
-            return
-        if player.position % 5 != 0 or player.position == 0:
+        reason = self._is_draw_card_enabled(player)
+        if reason:
+            self._speak_disabled_reason(player, reason)
             return
 
         self.cancel_sequences_by_tag("turn_flow")
         self.is_rolling = True
         self.refresh_menus()
-        
+
         self.play_sound(f"game_chaosbear/draw{random.randint(1, 2)}.ogg")
-        self.broadcast_l("chaosbear-draws-card", buffer="game", player=player.name)
+        self._broadcast_runner_event(
+            player,
+            "chaosbear-draw-card-you",
+            "chaosbear-draw-card-other",
+        )
 
         card = random.randint(0, 5)
         # Drawing gives a short surge so the action is not strictly weaker than rolling.
         new_pos = player.position + 3
-        
+
         event_delay = 10
-        msg_id = ""
+        personal_msg_id = ""
+        others_msg_id = ""
         kwargs = {}
         payload: dict[str, object] = {"player_id": player.id}
 
@@ -823,18 +1053,20 @@ class ChaosBearGame(Game):
             self.schedule_sound(
                 f"game_chaosbear/impulsion{random.randint(1, 2)}.ogg", delay_ticks=4
             )
-            msg_id = "chaosbear-card-impulsion"
-            kwargs = {"player": player.name, "position": new_pos}
+            personal_msg_id = "chaosbear-card-impulsion-you"
+            others_msg_id = "chaosbear-card-impulsion-other"
+            kwargs = {"position": new_pos, "gap": self._gap_to_bear(new_pos)}
             payload["pos"] = new_pos
-            
+
         elif card == 1:
             # Super impulsion - total forward 8
             new_pos += 5
             self.schedule_sound(
                 f"game_chaosbear/impulsion{random.randint(1, 2)}.ogg", delay_ticks=4
             )
-            msg_id = "chaosbear-card-super-impulsion"
-            kwargs = {"player": player.name, "position": new_pos}
+            personal_msg_id = "chaosbear-card-super-impulsion-you"
+            others_msg_id = "chaosbear-card-super-impulsion-other"
+            kwargs = {"position": new_pos, "gap": self._gap_to_bear(new_pos)}
             payload["pos"] = new_pos
 
         elif card == 2:
@@ -846,11 +1078,16 @@ class ChaosBearGame(Game):
             self.schedule_sound(
                 f"game_chaosbear/energydown{random.randint(1, 3)}.ogg", delay_ticks=24
             )
-            msg_id = "chaosbear-card-tiredness"
-            kwargs = {"player": player.name, "position": new_pos, "energy": new_energy}
+            personal_msg_id = "chaosbear-card-tiredness-you"
+            others_msg_id = "chaosbear-card-tiredness-other"
+            kwargs = {
+                "position": new_pos,
+                "gap": self._gap_to_bear(new_pos),
+                "energy": new_energy,
+            }
             payload["energy"] = new_energy
             payload["pos"] = new_pos
-            event_delay = 30 # Wait longer for energy sound
+            event_delay = 30  # Wait longer for energy sound
 
         elif card == 3:
             # Hunger - surge forward but increase bear energy
@@ -861,8 +1098,13 @@ class ChaosBearGame(Game):
             self.schedule_sound(
                 f"game_chaosbear/energyup{random.randint(1, 2)}.ogg", delay_ticks=14
             )
-            msg_id = "chaosbear-card-hunger"
-            kwargs = {"player": player.name, "position": new_pos, "energy": new_energy}
+            personal_msg_id = "chaosbear-card-hunger-you"
+            others_msg_id = "chaosbear-card-hunger-other"
+            kwargs = {
+                "position": new_pos,
+                "gap": self._gap_to_bear(new_pos),
+                "energy": new_energy,
+            }
             payload["energy"] = new_energy
             payload["pos"] = new_pos
             event_delay = 20
@@ -871,28 +1113,41 @@ class ChaosBearGame(Game):
             # Backward push cancels the draw surge
             new_pos = max(0, new_pos - 3)
             self.schedule_sound("game_chaosbear/backpush.ogg", delay_ticks=4)
-            msg_id = "chaosbear-card-backward"
-            kwargs = {"player": player.name, "position": new_pos}
+            personal_msg_id = "chaosbear-card-backward-you"
+            others_msg_id = "chaosbear-card-backward-other"
+            kwargs = {"position": new_pos, "gap": self._gap_to_bear(new_pos)}
             payload["pos"] = new_pos
 
         else:
             # Random gift - forward/back 1-6
-            self.broadcast_l("chaosbear-card-random-gift", buffer="game")
+            self._broadcast_runner_event(
+                player,
+                "chaosbear-card-random-gift-you",
+                "chaosbear-card-random-gift-other",
+            )
             amount = random.randint(1, 6)
             if random.random() < 0.5:
                 new_pos = max(0, new_pos - amount)
                 self.schedule_sound("game_chaosbear/backpush.ogg", delay_ticks=4)
-                msg_id = "chaosbear-gift-back"
+                personal_msg_id = "chaosbear-gift-back-you"
+                others_msg_id = "chaosbear-gift-back-other"
             else:
                 new_pos += amount
                 self.schedule_sound(
-                    f"game_chaosbear/impulsion{random.randint(1, 2)}.ogg", delay_ticks=4
+                    f"game_chaosbear/impulsion{random.randint(1, 2)}.ogg",
+                    delay_ticks=4,
                 )
-                msg_id = "chaosbear-gift-forward"
-            kwargs = {"player": player.name, "position": new_pos}
+                personal_msg_id = "chaosbear-gift-forward-you"
+                others_msg_id = "chaosbear-gift-forward-other"
+            kwargs = {
+                "position": new_pos,
+                "gap": self._gap_to_bear(new_pos),
+                "amount": amount,
+            }
             payload["pos"] = new_pos
 
-        payload["msg_id"] = msg_id
+        payload["personal_msg_id"] = personal_msg_id
+        payload["others_msg_id"] = others_msg_id
         payload["kwargs"] = kwargs
 
         self.start_sequence(
@@ -914,37 +1169,9 @@ class ChaosBearGame(Game):
 
     def _action_check_status(self, player: Player, action_id: str) -> None:
         """Check the current game status."""
-        if not isinstance(player, ChaosBearPlayer):
-            return
-
         user = self.get_user(player)
         if not user:
             return
 
-        # Show all player positions (sorted by distance, furthest first)
-        active = [p for p in self.players if not p.is_spectator]
-        active.sort(key=lambda p: p.position, reverse=True)
-        for p in active:
-                if p.alive:
-                    user.speak_l(
-                        "chaosbear-status-player-alive",
-                        buffer="game",
-                        player=p.name,
-                        position=p.position,
-                    )
-                else:
-                    user.speak_l(
-                        "chaosbear-status-player-caught",
-                        buffer="game",
-                        player=p.name,
-                        position=p.position,
-                    )
-
-        # Show bear status
-        user.speak_l(
-            "chaosbear-status-bear",
-            buffer="game",
-            position=self.bear_position,
-            energy=self.bear_energy,
-        )
+        self.status_box(player, self._status_lines(user.locale))
 
