@@ -1,850 +1,284 @@
-# Agents.md — AI Development Guide for PlayAural
+# AGENTS.md - PlayAural AI Development Guide
 
-This document is the authoritative reference for any AI assistant (Claude, Codex, or other) contributing to the PlayAural codebase. Follow every rule exactly. When in doubt, read the existing code — especially `crazyeights/game.py` and `dominos/game.py` as canonical examples.
+Concise mandatory rules for AI agents working on PlayAural. `CLAUDE.md` is the
+detailed source of truth; keep this file synchronized with it. If the two ever
+conflict, follow `CLAUDE.md` and update `AGENTS.md`.
 
-## 1. Project Overview
+## Project
 
-PlayAural is an **audio-first multiplayer online gaming platform** with full screen reader support. It has four first-party components:
+PlayAural is an audio-first multiplayer gaming platform for screen reader users.
+It is GPL-licensed and has four first-party components:
 
-| Component | Stack | Purpose |
-|-----------|-------|---------|
-| `server/` | Python 3.11, asyncio, WebSocket | Game logic, auth, persistence |
-| `client/` | Python, wxPython | Desktop client (screen reader accessible) |
-| `web_client/` | Vanilla JS PWA | Browser client (ARIA, service worker) |
-| `mobile_client/` | Expo, React Native, TypeScript | Android-first self-voicing mobile client with gesture navigation |
+- `server/`: Python 3.11 asyncio WebSocket server, games, auth, tables,
+  persistence, localization, ratings, voice authorization.
+- `client/`: Python wxPython desktop client with keyboard/screen-reader UX.
+- `web_client/`: vanilla JS PWA with ARIA, browser audio, and web TTS.
+- `mobile_client/`: Expo/React Native/TypeScript Android-first touch and
+  self-voicing client.
 
-All communication is WebSocket JSON packets: `Packet(type: str, data: dict)`.
+All gameplay communication is WebSocket JSON packets. Table voice chat is
+server-authorized but media flows through the separate LiveKit service. Never
+merge voice media into gameplay WebSocket traffic. Voice membership is
+runtime-only table state unless a future feature explicitly defines retention,
+cleanup, and account-deletion behavior.
 
-PlayAural also supports **table-scoped real-time voice chat**. The game server authorizes access and tracks voice membership, while a separate LiveKit-based media service carries the actual audio stream. Voice traffic must never be merged into the gameplay WebSocket transport.
+## Commands
 
----
+Run server tests from the repo root through uv:
 
-## 2. Core Architecture
-
-### 2.0 Voice Chat Architecture
-
-Voice chat is server-authorized and context-bound.
-
-- The game server remains the source of truth for whether a user may join a voice context.
-- A voice context is tied to a current gameplay context, currently a table. Clients must not join arbitrary rooms directly.
-- The server issues short-lived `voice_join_info` packets only after validating the caller's current table membership.
-- The server must close voice participation when the user leaves the table, disconnects, or otherwise loses the relevant context.
-- Voice presence is **runtime-only state** tied to the active table lifecycle. Do not introduce persistent database rows for voice membership unless the feature explicitly defines retention, cleanup, and account-deletion behavior.
-- Client packets related to this flow include `table_context`, `voice_join`, `voice_join_info`, `voice_join_error`, `voice_leave`, `voice_leave_ack`, and `voice_context_closed`.
-- The media path is separate from gameplay networking. Keep table logic, packet routing, and voice-service availability checks isolated so a media outage cannot stall the game server.
-
-### 2.1 Game Class Hierarchy
-
-Every game is a Python `@dataclass` decorated with `@register_game`, inheriting from `Game` plus 14 mixins:
-
-```
-Game (ABC, DataClassJSONMixin)
-├── GameSoundMixin          — play_sound, play_music, schedule_sound
-├── GameCommunicationMixin  — broadcast_l, speak to players
-├── GameResultMixin         — finish_game, end screen
-├── GameScoresMixin         — score display
-├── GamePredictionMixin     — outcome predictions
-├── TurnManagementMixin     — set_turn_players, advance_turn
-├── MenuManagementMixin     — rebuild_player_menu, update_player_menu
-├── ActionVisibilityMixin   — action visibility resolution
-├── LobbyActionsMixin       — lobby phase, bots, prestart_validate
-├── EventHandlingMixin      — base tick/event hooks (legacy per-game queues only)
-├── ActionSetCreationMixin  — keybinds, turn/standard action sets
-├── ActionExecutionMixin    — execute_action, find_action
-├── OptionsHandlerMixin     — declarative option handling + broadcast
-└── ActionSetSystemMixin    — action set resolution
+```bash
+uv run --project server --extra dev python -m pytest server/tests -q
+uv run --project server --extra dev python -m pytest server/tests/test_file.py::test_name
 ```
 
-Game state is serialized via Mashumaro for persistence. **All game state must live in dataclass fields** — runtime-only state goes in `__post_init__`.
+Run focused tests while iterating. Run the full suite before landing
+cross-subsystem changes or features. Tests are parallel-safe with `-n auto`;
+keep new tests deterministic and avoid RNG-dependent exact assertions.
 
-### 2.1b Optional Mixins
+Other common commands:
 
-Beyond the 14 base mixins, games can inherit from additional utility mixins:
-
-| Mixin | Module | Purpose |
-|-------|--------|---------|
-| `GridGameMixin` | `game_utils.grid_mixin` | 2D grid navigation, per-player cursors, arrow-key movement, cell actions with `grid_enabled`/`grid_width` protocol flags for web grid rendering. Override `get_cell_label`, `on_grid_select`, `is_grid_cell_enabled`, `is_grid_cell_hidden`. Call `_init_grid()` in `on_start()`, `setup_grid_keybinds()` in `setup_keybinds()`, and `build_grid_actions(player)` + `build_grid_nav_actions()` in `create_turn_action_set()`. Grid games must declare `grid_cursors: dict[str, GridCursor]` exactly — not tuples, lists, or untyped dicts — so Mashumaro can serialize saved table state safely. |
-| `TurnTimerMixin` | `game_utils.turn_timer_mixin` | Turn countdown timer using `PokerTurnTimer`. Call `start_turn_timer()`, `stop_turn_timer()`, `on_tick_turn_timer()` in `on_tick()`. |
-
-MRO placement: `class MyGame(Game, TurnTimerMixin)` or `class MyGame(GridGameMixin, TurnTimerMixin, Game)`. `GridGameMixin` must come before `Game`; `TurnTimerMixin` can go either side.
-
-**Grid serialization rule:** If a game uses `GridGameMixin`, every serialized grid field must use Mashumaro-safe types. In particular:
-- `grid_cursors` must be annotated as `dict[str, GridCursor]`
-- `grid_row_labels` must be `list[str]`
-- `grid_col_labels` must be `list[str]`
-- Do not store raw `(row, col)` tuples, ad-hoc dicts, or other cursor shapes in serialized game state
-
-Reason: Mashumaro serializers are generated from type annotations, not just runtime values. A mismatched annotation like `dict[str, tuple[int, int]]` can crash table save/restore even if the runtime objects happen to be `GridCursor` instances.
-
-### 2.1c SequenceRunnerMixin (Built Into `Game`)
-
-All games automatically inherit `SequenceRunnerMixin` through `Game`. Use it for any **cinematic, delayed, multi-step gameplay flow** that must survive save/load and must not deadlock the table:
-
-- movement animations that resolve over several ticks
-- delayed reveals, captures, explosions, collapses, bear turns, roulette phases
-- audio-first cutscenes where sounds and state changes need explicit ordering
-- any old `event_queue`-style flow that used `(tick, event_type, data)` tuples
-
-Do **not** hardcode game rules into the helper. The helper only runs serialized beats and calls the game back through `on_sequence_callback(...)`.
-
-Core serialized types:
-
-- `SequenceOperation`
-  - `sound_op(path, volume=..., pan=..., pitch=...)`
-  - `localized_sound_op({"en": "...", "vi": "..."}, fallback_locale="en", ...)`
-  - `callback_op("callback_id", payload={...})`
-- `SequenceBeat`
-  - `ops=[...]`
-  - `delay_after_ticks=N`
-  - `SequenceBeat.pause(N)` for a pure wait beat
-- `SequenceState`
-  - stored automatically in `Game.active_sequences`
-
-Standard usage pattern:
-
-```python
-self.start_sequence(
-    "turn_flow",
-    [
-        SequenceBeat(
-            ops=[SequenceOperation.sound_op("game_x/start.ogg")],
-            delay_after_ticks=12,
-        ),
-        SequenceBeat(
-            ops=[SequenceOperation.callback_op("apply_move", {"player_id": player.id})],
-            delay_after_ticks=8,
-        ),
-        SequenceBeat(
-            ops=[SequenceOperation.callback_op("finish_turn")],
-        ),
-    ],
-    tag="turn_flow",
-    lock_scope=self.SEQUENCE_LOCK_GAMEPLAY,
-    pause_bots=True,
-)
+```bash
+cd server && python -m server
+python client/client.py
+python -m http.server 8080 --directory web_client
+cd mobile_client && cmd /c npm install && cmd /c npm run generate:sounds
+cd mobile_client && cmd /c npm run typecheck && npx expo start
 ```
 
-Then implement:
+## Core Architecture
 
-```python
-def on_sequence_callback(self, sequence_id: str, callback_id: str, payload: dict) -> None:
-    if callback_id == "apply_move":
-        ...
-```
+- `server/games/` currently registers 42 games. Categories are `cards`, `dice`,
+  `board`, `poker`, `arcade`, and `misc`; user-facing category labels must be
+  localized. The Play menu uses dynamic counts, not hardcoded category counts.
+- Games are `@dataclass` classes registered with `@register_game`, inherit from
+  `Game`, and may add utility mixins such as `GridGameMixin` or
+  `TurnTimerMixin`.
+- Persistent game state must be dataclass fields serialized safely by
+  Mashumaro. Runtime-only state belongs in `__post_init__`.
+- Use the canonical `Player` and `ActionContext` types from
+  `server/game_utils/` or the `server/games/base.py` re-exports. Do not create
+  duplicate base player/context classes.
+- Every game implements metadata methods including `get_name`, `get_type`,
+  `get_category`, player bounds, and `get_supported_leaderboards`.
+- Use `get_active_players()` for gameplay, results, and winner logic. Do not
+  iterate `self.players` for active-player decisions unless spectators/bots are
+  deliberately included.
+- `set_turn_players(players)` resets `turn_index` to 0. Do not call
+  `advance_turn()` immediately afterward.
+- `on_tick()` must call `super().on_tick()`, process scheduled sounds, process
+  sequences, and gate bot logic when sequences pause bots.
+
+## Timed Flows
+
+Use `SequenceRunnerMixin` for delayed gameplay/audio flows that must survive
+save/load: movement animations, reveals, captures, roulette, cutscenes, and any
+legacy event-queue style flow.
 
 Rules:
 
-- **Use explicit beats, not ad-hoc tick tuples.** The sequence definition is the source of truth for timing.
-- **Keep payloads Mashumaro-safe.** Only store serializable primitives/dicts/lists or dataclasses already used safely elsewhere.
-- **Use `callback_op` for state changes.** Sounds should never be the only thing driving game logic.
-- **Use `sound_op` for shared mechanical sounds** that every listener hears.
-- **Use `localized_sound_op` for voice acting or locale-specific files.** The helper dispatches per listener locale in real time.
-- **Use explicit `delay_after_ticks` values.** Do not assume localized audio files have matching durations unless the asset pipeline guarantees it.
-- **Cancel stale flows on phase reset.** Use `cancel_sequences_by_tag("turn_flow")` or `cancel_sequence("...")` when restarting a turn/round.
+- Build explicit `SequenceBeat` lists with `sound_op`, `localized_sound_op`,
+  and `callback_op`.
+- State changes happen in callbacks, not because a sound played.
+- Payloads must be Mashumaro-safe primitives, lists, dicts, or safe dataclasses.
+- Prefer `SEQUENCE_LOCK_GAMEPLAY`; keep info/status actions available.
+- Use `pause_bots=True` when bots must wait.
+- Cancel stale tagged sequences when resetting a phase or round.
 
-Locking policy:
+## Grid Games
 
-- `SEQUENCE_LOCK_NONE`: no gameplay locking
-- `SEQUENCE_LOCK_GAMEPLAY`: block gameplay actions only, while info/status actions remain available
-- `SEQUENCE_LOCK_ALL`: reserve for rare full-input freezes only
+For `GridGameMixin`, serialized fields must use exact safe types:
 
-Default rule: use `SEQUENCE_LOCK_GAMEPLAY` for almost every in-game cinematic flow. PlayAural should keep informational actions such as board reads, status checks, scores, and whose-turn available whenever possible.
+- `grid_cursors: dict[str, GridCursor]`
+- `grid_row_labels: list[str]`
+- `grid_col_labels: list[str]`
 
-Bot rule:
+Do not store raw tuples or ad-hoc cursor dicts in serialized grid state.
 
-- Set `pause_bots=True` for any sequence that should suspend bot input until the sequence finishes.
-- In `on_tick()`, call `self.process_sequences()` before bot logic.
-- Gate bot processing with `if not self.is_sequence_bot_paused(): ...`
+## Actions, Menus, and Focus
 
-Persistence rule:
+Action sets resolve in this order: `turn -> lobby -> options -> standard`.
 
-- Sequences are serialized automatically in `active_sequences`.
-- Any gameplay state the callback needs after restore must already live in dataclass fields or in the callback payload.
-- Never store critical sequence progress in runtime-only fields.
+- Turn-menu gameplay actions use `show_in_actions_menu=False`.
+- Game-specific info/status actions belong in `create_standard_action_set`, not
+  the turn set.
+- `Action.include_spectators` and matching keybind `include_spectators` must
+  agree.
+- Public information may use `include_spectators=True`; private or mutating
+  gameplay actions normally must not.
 
-Migration rule:
+Game code does not paint menus directly. It records intent only with:
 
-- New work must prefer `SequenceRunnerMixin` over hand-rolled `event_queue` systems.
-- Existing games should treat old per-game event queues as legacy and migrate to the shared runner when touched.
+- `refresh_menus(player=None)`: mark one player or everyone dirty.
+- `request_menu_focus(player, action_id)`: one-shot focus jump for one player.
 
-### 2.2 File Structure for a New Game
+`flush_menus()` is sealed and framework-owned. Games must not override or call
+menu flush internals except tests calling `flush_menus()` at production
+boundaries after direct `execute_action`, `_action_*`, `on_start`, or `on_tick`.
+Do not resurrect old `rebuild_*` / `update_*` patterns.
 
-```
-server/games/<game_name>/
-├── __init__.py       # from .game import <GameName>Game
-├── game.py           # Core game logic
-└── bot.py            # Bot AI (optional — can stay in game.py for simple bots)
-```
+Customize painting through:
 
-Additionally required:
-- `server/locales/en/<game_name>.ftl` — English strings
-- `server/locales/vi/<game_name>.ftl` — Vietnamese strings
-- `server/documentation/content/en/games/<game_name>.md` — English docs
-- `server/documentation/content/vi/games/<game_name>.md` — Vietnamese docs
-- `server/tests/test_<game_name>.py` — pytest test suite
+- `before_menu_build(player)`: idempotently sync dynamic action sets and order.
+- `build_menu_items(player, user) -> MenuBuild`: custom item/grid layout.
 
-Registration:
-- Add `from .<game_name>.game import <GameName>Game` to `server/games/__init__.py`
-- Add `"<GameName>Game"` to the `__all__` list in the same file
+Client focus doctrine:
 
-### 2.3 Required Class Methods
+- Same-menu repaint preserves focus by item id; `NetworkUser` skips identical
+  same-menu repaints with no focus directive.
+- Anchors break only when the focused item leaves the menu, the menu identity
+  changes, or `selection_id` explicitly jumps focus.
+- Keep disabled-but-visible persistent controls when they anchor touch or screen
+  reader focus. Use `request_menu_focus` only for deliberate action-driven jumps.
 
-Every game must implement these `@classmethod` methods:
+## Touch Clients
 
-| Method | Returns | Example |
-|--------|---------|---------|
-| `get_name()` | `str` — English display name | `"Dominos"` |
-| `get_type()` | `str` — type identifier (lowercase) | `"dominos"` |
-| `get_category()` | `str` — backend category id | `"board"` |
-| `get_min_players()` | `int` | `2` |
-| `get_max_players()` | `int` | `4` |
-| `get_supported_leaderboards()` | `list[str]` | `["wins", "rating", "games_played"]` |
-
-Available categories: `cards`, `dice`, `board`, `poker`, `arcade`, `misc`.
-
-Game categories are used for backend management and for the user-facing Play menu category filter. Every category shown to users must have localized labels in both EN and VI locale files. The Play menu filter displays dynamic counts, so new games only need correct category metadata; do not hardcode category counts in UI strings or tests.
-
-Games normally return one category from `get_category()`. If a future game naturally belongs to multiple categories, override `get_categories()` and return unique category ids. Keep `get_category()` as the primary category for compatibility with existing tests, management tools, and metadata exports.
-
-### 2.4 Required Instance Methods
-
-| Method | Purpose |
-|--------|---------|
-| `create_player(id, name, is_bot)` | Return your custom `Player` subclass |
-| `on_start()` | Initialize round, deal, set turn order |
-| `on_tick()` | Called every 50ms — handle bot AI, timers, events |
-| `create_turn_action_set(player)` | Build the turn menu action set |
-| `create_standard_action_set(player)` | Build the actions/Escape menu |
-| `setup_keybinds()` | Register keyboard shortcuts |
-| `bot_think(player)` | Return an action ID for bot AI |
-| `build_game_result()` | Build `GameResult` for leaderboards |
-| `format_end_screen(result, locale)` | Format end-of-game display |
-
-### 2.5 Player Subclass
-
-Always create a game-specific `Player` subclass as a `@dataclass`:
-
-```python
-@dataclass
-class MyGamePlayer(Player):
-    hand: list[MyCard] = field(default_factory=list)
-    score: int = 0
-```
-
-Data model classes (cards, tiles, tokens) must also be `@dataclass` with `DataClassJSONMixin` for serialization.
-
-The shared base `Player` type lives in `server/game_utils/player.py` and is re-exported by `server/games/base.py` for game modules. The shared `ActionContext` type lives in `server/game_utils/action_context.py`. Reuse these canonical types instead of creating duplicate local base classes or ad-hoc context objects.
-
----
-
-## 3. Action System
-
-### 3.1 Action Anatomy
-
-```python
-Action(
-    id="draw",                          # Unique string ID
-    label="Draw a card",                # Static label (or empty if using get_label)
-    handler="_action_draw",             # Method name: (self, player, action_id)
-    is_enabled="_is_draw_enabled",      # -> str | None (None = enabled, str = disabled reason key)
-    is_hidden="_is_draw_hidden",        # -> Visibility.VISIBLE | Visibility.HIDDEN
-    get_label="_get_draw_label",        # Optional dynamic label: (self, player, action_id) -> str
-    input_request=None,                 # Optional MenuInput or EditboxInput
-    show_in_actions_menu=True,          # False = hidden from Escape/Actions menu
-    include_spectators=False,           # True = spectators can see/execute
-)
-```
-
-### 3.2 Action Sets
-
-Games have two action sets per player:
-- **Turn set** (`"turn"`) — The primary gameplay menu. Dynamic per-tick.
-- **Standard set** (`"standard"`) — The Escape/Actions menu. Static utility actions.
-
-`get_all_enabled_actions()` combines action sets in this order: **turn → lobby → options → standard**. The Escape/actions menu displays them in this combined order. Two rules prevent UX issues:
-
-**Rule 1: Info/status actions belong in `create_standard_action_set`, not `create_turn_action_set`.**
-Game-specific read-only actions (check hand, view dice, check status, view table, etc.) must be defined in `create_standard_action_set`. Placing them in the turn set causes them to appear *above* the platform's default global actions (leave game, scores, game info) in the Escape menu, breaking consistent ordering across games. They are still accessible via their keybinds regardless of which set they belong to.
-
-**Rule 2: Turn actions need `show_in_actions_menu=False`.**
-Core gameplay actions (hit, stand, roll, play card, shoot, etc.) already appear as tappable buttons in the turn menu. Without `show_in_actions_menu=False`, they also appear at the *top* of the Escape/actions menu, pushing global actions down. Set `show_in_actions_menu=False` on every turn action that is already visible in the turn menu.
-
-**Summary:**
-- **Turn action set**: Only actions that need to appear as turn menu buttons (play, roll, pass, etc.) — always with `show_in_actions_menu=False`.
-- **Standard action set**: Info/status actions (check hand, view scores, view table, etc.) — always below default global actions in the Escape menu.
-- **Keybinds**: Work independently of which action set an action belongs to.
-
-### 3.3 Spectator Visibility (`include_spectators`)
-
-- **Default `False`** — player-private actions (play card, read hand, fold)
-- **Set `True`** — public information (scores, turn status, table info, game rules)
-- The `include_spectators` flag on `Action` and its corresponding `Keybind` **must always agree**
-
-Standard/lobby actions already `include_spectators=True` in base class: `show_actions`, `toggle_spectator`, `host_management`, `leave_game`, `start_game`, `add_bot`, `remove_bot`, `whose_turn`, `whos_at_table`, `check_scores`, `check_scores_detailed`, `predict_outcomes`, `game_info`, `game_rules`.
-
-### 3.4 Dynamic Turn Menu (`_sync_turn_actions`)
-
-For games with dynamic hand/tile content, implement `_sync_turn_actions(player)` to rebuild tile/card actions each tick:
-
-1. Remove old dynamic actions: `turn_set.remove_by_prefix("play_tile_")`
-2. Re-add based on current hand
-3. Set `turn_set._order` to control display order
-4. Call from `rebuild_player_menu`, `update_player_menu`, and `rebuild_all_menus`
-
----
-
-## 4. Keybind System
-
-### 4.1 Defining Keybinds
-
-```python
-def setup_keybinds(self) -> None:
-    super().setup_keybinds()  # MUST call super — registers all base keybinds
-    self.define_keybind("space", "Draw", ["draw"], state=KeybindState.ACTIVE)
-    self.define_keybind("v", "View chain", ["view_chain"],
-                        state=KeybindState.ACTIVE, include_spectators=True)
-```
-
-### 4.2 KeybindState Values
-
-| State | When active |
-|-------|-------------|
-| `NEVER` | Disabled |
-| `IDLE` | Lobby/waiting only |
-| `ACTIVE` | During gameplay only |
-| `ALWAYS` | Always available |
-
-### 4.3 Reserved Keys — DO NOT USE
-
-These keys are bound by the base class or client. **Never assign them in a game:**
-
-| Key | Base Function |
-|-----|---------------|
-| `enter` | Start game (lobby) |
-| `escape` | Actions menu |
-| `b` | Add bot (lobby) |
-| `shift+b` | Remove bot (lobby) |
-| `f3` | Toggle spectator (lobby) |
-| `t` | Whose turn |
-| `s` | Check scores |
-| `shift+s` | Detailed scores |
-| `ctrl+m` | Host management |
-| `ctrl+q` | Leave table |
-| `ctrl+u` | Who's at table |
-| `ctrl+s` | Save table |
-| `ctrl+r` | Predict outcomes |
-| `ctrl+i` | Game info |
-| `ctrl+f1` | How to play |
-
-### 4.4 Keybind Audit Rule
-
-Before finalizing keybinds, verify:
-- No collision with reserved keys above
-- `include_spectators` on keybind matches the corresponding `Action`
-- Every gameplay keybind uses `state=KeybindState.ACTIVE`
-
----
-
-## 5. GameOptions (Declarative Options System)
-
-### 5.1 Defining Options
-
-```python
-@dataclass
-class MyGameOptions(GameOptions):
-    target_score: int = option_field(
-        IntOption(default=100, min_val=10, max_val=500,
-                  value_key="score",
-                  label="mygame-set-target-score",
-                  prompt="mygame-enter-target-score",
-                  change_msg="mygame-option-changed-target-score"))
-    mode: str = option_field(
-        MenuOption(default="normal", choices=["normal", "hard"],
-                   label="mygame-set-mode", prompt="mygame-select-mode",
-                   change_msg="mygame-option-changed-mode",
-                   choice_labels={"normal": "mygame-mode-normal", "hard": "mygame-mode-hard"}))
-    hints: bool = option_field(
-        BoolOption(default=True, label="mygame-set-hints",
-                   change_msg="mygame-option-changed-hints"))
-```
-
-Option types: `IntOption`, `FloatOption`, `MenuOption`, `BoolOption`, `TeamModeOption`.
-
-### 5.2 Rules
-
-- **Every option MUST have working game logic.** No dead options. Grep `self.options.<name>` to verify it's used.
-- **Every option MUST have a `change_msg` key** defined in both EN and VI `.ftl` files. The system broadcasts changes automatically.
-- **`MenuOption` must have `choice_labels`** mapping internal values to localization keys so users see localized text, not raw strings.
-- **`TeamModeOption`** uses `TeamManager.get_all_team_modes(min, max)` for dynamic choices.
-- Team-based games should use the shared team arrangement flow unless their rules explicitly forbid manual team assignment.
-
-### 5.3 Pre-start Validation
-
-Override `prestart_validate()` to catch invalid option combinations before the game starts:
-
-```python
-def prestart_validate(self) -> list[str | tuple[str, dict]]:
-    errors = super().prestart_validate()
-    # Validate team mode
-    team_error = self._validate_team_mode(self.options.team_mode)
-    if team_error:
-        errors.append(team_error)
-    # Validate deck/hand constraints
-    if self.options.hand_size * len(self.get_active_players()) + 1 > 108:
-        errors.append(("mygame-error-too-many-cards",
-                       {"players": len(self.get_active_players()), "hand_size": self.options.hand_size}))
-    return errors
-```
-
----
-
-## 6. Audio-First Design & Screen Reader Accessibility
-
-### 6.1 Core Principle
-
-PlayAural is designed for visually impaired users. **Every game state change must be communicated through audio** — either TTS announcements or sound effects. The UI is navigated entirely by keyboard on desktop, by touch-driven turn menus on web, and by self-voicing gesture navigation on mobile.
-
-### 6.2 TTS Buffer Rules
-
-Every `speak_l()` and `broadcast_l()` call **must** include an explicit `buffer=` parameter:
-
-| Buffer | Use For |
-|--------|---------|
-| `"game"` | All gameplay events — turns, plays, scores, state changes |
-| `"system"` | Connections, host management, settings, errors |
-| `"chat"` | Player-to-player messages only |
-| `"misc"` | Minor informational messages that fit none of the above |
-
-### 6.3 Sound Design
-
-- Use `self.play_sound(path)` for global events all players hear
-- Use `user.play_sound(path)` for player-specific feedback
-- Use `self.play_music(path)` for background music
-- Use `self.schedule_sound(path, delay_ticks)` for timed audio
-- Use `SequenceRunnerMixin` for multi-step cinematic flows that need timed callbacks, save/load safety, or gameplay locking
-- `on_tick()` must call `super().on_tick()` and `self.process_scheduled_sounds()`
-
-### 6.4 Client Speech Settings
-
-The server keeps browser speech settings and mobile self-voicing settings separate:
-
-- Web client speech preferences use `speech_mode`, `speech_voice`, and `speech_rate`.
-- Mobile client speech preferences use `mobile_tts_engine`, `mobile_tts_voice`, and `mobile_tts_rate`.
-- `server/core/server.py` filters preferences by client capability before sending them to each client.
-- Mobile TTS settings are stored locally by the mobile app and synchronized with the user's server account.
-- Device voice availability is platform-specific. The mobile client must safely fall back to the system default voice when a synced engine or voice is unavailable.
-- Expo web-runtime testing uses browser Web Speech voices; Android builds use the device TTS service through Expo Speech.
-
-### 6.4b Voice Client Rules
-
-- Voice authorization errors must be localized in both English and Vietnamese everywhere they can surface.
-- Voice status announcements that are intended to behave like table-presence notices should follow the same user-facing delivery style as normal table join/leave announcements.
-- If a client stores a preferred audio input device locally, that preference must fall back safely to the system default when the saved device is unavailable on the current machine.
-- Leaving a table, losing connection, or closing the client must fully tear down voice participation. Do not rely on UI-only cleanup for voice lifecycle correctness.
-- When adding voice-related sounds, keep filenames and trigger points consistent across desktop, web, and mobile sound packs.
-
-### 6.5 Information Actions
-
-Provide keybind-accessible information actions so players can query game state at any time:
-- Read hand / Read tiles (player-private, `include_spectators=False`)
-- View board / Read chain (public, `include_spectators=True`)
-- Read opponent counts (public, `include_spectators=True`)
-- Check scores (inherited from base class)
-
----
-
-## 7. Web/Mobile UI Rules (Mandatory)
-
-Desktop users have keyboard shortcuts. Web/mobile users rely on **tappable buttons in the Turn Menu**. Every game must account for both.
-
-### 7.1 Touch Client Detection
-
-```python
-from server.game_utils.client_types import is_touch_client
-
-user = self.get_user(player)
-if user and is_touch_client(user):
-    return Visibility.VISIBLE
-```
-
-Game logic uses `server/game_utils/client_types.py` for touch capability checks. Use `is_touch_client(user)` instead of raw `client_type` string comparisons.
-
-### 7.2 Time-Critical Reaction Actions
-
-Actions that require fast response (buzzer, challenge, jump-in, accept) **must** be visible as tappable buttons in the Turn Menu during their active windows for touch clients. Use `is_hidden` callbacks to conditionally show them:
-
-```python
-from server.game_utils.client_types import is_touch_client
-
-def _is_buzzer_hidden(self, player: Player) -> Visibility:
-    # Desktop users use keybinds — hide from turn menu
-    if self.status != "playing" or player.is_spectator:
-        return Visibility.HIDDEN
-    user = self.get_user(player)
-    if user and is_touch_client(user):
-        if self._is_reaction_window_active():
-            return Visibility.VISIBLE
-    return Visibility.HIDDEN
-```
-
-### 7.3 Utility Actions for Web
-
-Actions that desktop users access via keybinds (sort hand, read hand, view board, read counts) should appear in the Turn Menu for touch clients. Override their `is_hidden` to return `VISIBLE` when `is_touch_client(user)` is true.
-
-### 7.4 Turn Menu Ordering
-
-Order matters for screen readers — users navigate sequentially top-to-bottom:
-
-1. **Reaction buttons** (buzzer, challenge, accept) — top
-2. **Card/tile play actions** — middle
-3. **Confirm selection** (if multi-select) — after cards
-4. **Utility buttons** (draw, pass, knock, sort) — bottom
-
-Implement ordering in `_sync_turn_actions` by manipulating `turn_set._order`:
-
-```python
-from server.game_utils.client_types import is_touch_client
-
-user = self.get_user(player)
-if user and is_touch_client(user):
-    top = ["buzzer", "challenge"]
-    bottom = ["draw", "knock", "sort"]
-    card_ids = [aid for aid in turn_set._order if aid.startswith("play_")]
-    pinned = set(top) | set(bottom) | set(card_ids)
-    middle = [aid for aid in turn_set._order if aid not in pinned]
-    turn_set._order = (
-        [aid for aid in top if aid in turn_set._order]
-        + middle + card_ids
-        + [aid for aid in bottom if aid in turn_set._order]
-    )
-```
-
-### 7.5 Standard Action Ordering for Touch Clients
-
-Within the standard action set, touch clients must maintain a **consistent ordering** of touch-visible information actions across all games:
-
-1. **Game-specific info actions** (check status, view table, read hand, etc.) — above shared table status actions
-2. **`check_scores`** (if the game tracks scores) — after game-specific info actions
-3. **`whose_turn`** — after scores/status info
-4. **`whos_at_table`** — last
-
-Implement this via the shared helper in any touch-client standard-action ordering path. This applies to `create_standard_action_set` and to any dynamic `_sync_standard_actions` method that rebuilds or reorders standard actions:
-
-```python
-user = self.get_user(player)
-if self.is_touch_client(user):
-    target_order = [
-        "game_specific_action",
-        "check_scores",
-        "whose_turn",
-        "whos_at_table",
-    ]
-    self._order_touch_standard_actions(action_set, target_order)
-```
-
-The helper preserves non-target actions above the touch info group and appends only actions that exist in the set. Do not duplicate custom `new_order` / `final_order` loops for this standard-action pattern. Desktop ordering is separate and must not be changed by touch-only reordering.
-
-For games that track scores, also add a `_is_check_scores_hidden` visibility override (visible for touch clients when playing). See `pig/game.py` or `farkle/game.py` as references.
-
----
-
-## 8. Turn Management
-
-### 8.1 Critical Rules
-
-- **`set_turn_players(players)`** resets `turn_index` to 0. `players[0]` becomes current immediately.
-- **`advance_turn()`** increments the index. **Never** call immediately after `set_turn_players` — it skips the first player.
-- **Canonical round start pattern:**
-  ```python
-  self.set_turn_players(active_players)
-  self.announce_turn()  # NO advance_turn() between these
-  ```
-- **`get_active_players()`** excludes spectators. Always use it for game logic — never iterate `self.players` directly.
-
-### 8.2 Bot Turn Management
-
-```python
-def _queue_bot_turn(self) -> None:
-    current = self.current_player
-    if current and current.is_bot:
-        BotHelper.jolt_bot(current, ticks=random.randint(12, 24))
-
-def on_tick(self) -> None:
-    super().on_tick()
-    self.process_scheduled_sounds()
-    if self.status == "playing" and self.current_player and self.current_player.is_bot:
-        BotHelper.on_tick(self)
-
-def bot_think(self, player: Player) -> str | None:
-    # Return an action ID string, or None to skip
-    ...
-```
-
-- `BotHelper.jolt_bot` sets `bot_think_ticks` for a delay before the bot acts
-- `BotHelper.on_tick` decrements ticks and calls `bot_think` → `execute_action`
-- In tests, use `advance_until(game, condition_fn, max_ticks=500)` instead of fixed tick counts
-
-### 8.3 Score Management
-
-The shared score actions are provided by `GameScoresMixin` and `TeamManager`. Games that use the default score actions must keep `TeamManager` synchronized with the authoritative game state before scores are read or results are built.
+Use `server/game_utils/client_types.py` helpers (`is_touch_client`,
+`is_touch_client_type`, `uses_self_voicing_settings`) instead of raw
+`client_type` checks. Touch clients include web and mobile; mobile is not web.
 
 Rules:
 
-- The default scoreboard unit is localized points. Any game whose score is not points must set a class attribute such as `score_unit_key = "game-score-unit-chips"` and either reuse an existing global unit key or define a new one in both `server/locales/en/games.ftl` and `server/locales/vi/games.ftl`.
-- Score unit strings must use Fluent plural/select syntax when the language requires it. The shared formatter passes `count`, so unit labels such as points, chips, tokens, rounds, coins, and pawns can be localized correctly.
-- If a game has a target score in `options.target_score` or `options.winning_score`, the default `get_score_target()` handles it. Override `get_score_target()` only when the target is stored elsewhere or computed from multiple options.
-- If a game has custom scoring that does not use `TeamManager`, override `supports_score_actions()`, `_action_check_scores`, and `_action_check_scores_detailed` together. Do not expose score actions unless they have meaningful score lines to report.
-- Scoreless games should leave `TeamManager` empty and should not override score support. In scoreless games, the score buttons are hidden and the `s` / `shift+s` keybinds must be silently ignored.
-- Brief score checks must speak one line per player/team in the `"game"` buffer. Do not combine every player's score into one long TTS message.
-- Detailed score checks should use `status_box(player, lines)` with one line per player/team unless the game has a stronger established detail view.
-- Any code that formats `game-score-line` or `game-score-line-target` directly must pass the localized `unit` variable. Prefer `TeamManager.format_scores_detailed(...)` or a small game helper over open-coded formatting.
-- Score display units are presentation only. Leaderboards, ratings, personal statistics, and `GameResult.custom_data` must continue to store numeric values in their existing schema.
+- Time-critical reaction actions must be visible in the turn menu during active
+  windows for touch clients.
+- Utility actions normally reached by desktop keybinds should be touch-visible
+  when useful.
+- Turn order for touch menus: reactions, primary card/tile/play actions,
+  multi-select confirmation, utilities.
+- Touch standard-action order: game-specific info, `check_scores` if supported,
+  `whose_turn`, `whos_at_table`.
+- Use `_order_touch_standard_actions(action_set, target_order)`; do not copy
+  manual ordering loops. Keep desktop ordering separate.
 
-### 8.4 Team Management
+## Keybinds
 
-Team-based games use the shared `TeamManager` and the base lobby team arrangement flow.
+`setup_keybinds()` must call `super().setup_keybinds()` first. Gameplay
+keybinds use `KeybindState.ACTIVE`; lobby-only actions use `IDLE`; truly global
+actions use `ALWAYS`.
 
-Rules:
+Reserved base/client keys: `enter`, `escape`, `b`, `shift+b`, `f3`, `t`, `s`,
+`shift+s`, `ctrl+m`, `ctrl+q`, `ctrl+u`, `ctrl+s`, `ctrl+r`, `ctrl+i`,
+`ctrl+f1`. Do not reuse them for game-specific actions unless deliberately
+matching the standard behavior.
 
-- Games with a `TeamModeOption` must validate `self.options.team_mode` in `prestart_validate()` with `_validate_team_mode(...)`.
-- Team games should call `_setup_team_manager_for_start(self.options.team_mode, active_players)` during `on_start()` or their team setup helper. This preserves host-arranged teams when the lobby arrangement phase is active and falls back to automatic assignment for direct tests, saved games, and non-arranged starts.
-- Team games whose turn order depends on team seating must call `_get_team_turn_players(active_players)` before `set_turn_players(...)`. This preserves the old round-robin balance after manual team swaps instead of letting teammates act back-to-back accidentally.
-- The host-controlled team arrangement phase is enabled by default for non-`individual` team modes. Override `allows_team_arrangement()` and return `False` only when a game's rules require fixed or automatic teams.
-- Do not duplicate team-selection UI inside individual games. The shared lobby actions handle reading teams, selecting a member, swapping with another team, cancelling, and confirming the game start.
-- Team arrangement must remain a lobby-only flow. Games should not switch `status` to `"playing"` until arranged teams are confirmed and `on_start()` is called.
-- Roster-changing actions such as joining, leaving, adding bots, removing bots, spectator toggles, or option changes must not silently mutate an active team arrangement. Use the shared helpers and visibility rules so arrangement is cancelled, blocked, or rebuilt deliberately.
+## Options
 
----
+Use declarative `GameOptions` with `option_field()`.
 
-## 9. Localization
+- Every option must have working logic; no dead options.
+- Every option needs a localized `change_msg` in EN and VI.
+- `MenuOption` needs `choice_labels` for every raw value.
+- `TeamModeOption` uses shared team-mode helpers.
+- `prestart_validate()` must block invalid player counts, impossible deals,
+  unsupported option combinations, and team-mode conflicts with clear localized
+  errors.
 
-### 9.1 Locale File Structure
+## Audio and Accessibility
 
-Every game needs two `.ftl` files:
-- `server/locales/en/<game_type>.ftl`
-- `server/locales/vi/<game_type>.ftl`
+Audio-first is mandatory. Every important state change needs TTS and/or sound.
 
-### 9.2 Required Key Patterns
+- Every `speak_l()` and `broadcast_l()` call must pass explicit `buffer=`.
+- Buffers: `game` for gameplay, `system` for settings/connection/moderation,
+  `chat` for chat only, `misc` for minor non-game informational output.
+- Use `play_sound`, `user.play_sound`, `play_music`, ambience helpers, scheduled
+  sounds, or sequences as appropriate.
+- Provide information actions for state queries such as hand, board/table,
+  counts, status, scores, and whose turn.
 
-```ftl
-# Game name (required — used by server menu system)
-game-name-<type> = <English Name>
+## Localization
 
-# Option labels (one per option — use $<value_key> as the variable name)
-<type>-set-<option> = <Label>: { $<value_key> }
-<type>-enter-<option> = <Prompt>               # IntOption/FloatOption only
-<type>-select-<option> = <Prompt>              # MenuOption only
-<type>-option-changed-<option> = <Changed message with $<value_key>>.
+All player-facing strings go through Fluent. No hardcoded English may reach
+players.
 
-# Option choice labels (MenuOption)
-<type>-mode-<choice> = <Localized choice name>
+- Use `speak_l`, `broadcast_l`, `broadcast_personal_l`, localized option/pref
+  helpers, and localized sequence helpers.
+- Pass raw data as kwargs and let Fluent format lists, plurals, and selects.
+- Maintain EN/VI parity: same keys, variables, and plural/select arms.
+- Agents author both EN and VI strings in this repo, but Vietnamese is
+  provisional and should be flagged for native review when quality matters.
+- Prefer writing locale keys before feature code so every announcement path is
+  planned.
 
-# Action labels
-<type>-<action> = <Label>
+## Scores, Leaderboards, and Teams
 
-# Disabled reasons
-<type>-<reason> = <Explanation>.
+- Only games with real leaderboard support should expose
+  `get_supported_leaderboards()` entries.
+- Scoreless games should not claim score support; score buttons are hidden and
+  `s` / `shift+s` are ignored silently.
+- Games using default score actions must keep `TeamManager` synchronized.
+- Non-point units need a localized `score_unit_key` in shared `games.ftl` or the
+  game locale when unique. Units are display only; stored stats remain numeric.
+- Brief score checks speak one line per player/team in the `game` buffer.
+- Detailed score checks normally use `status_box(player, lines)` with one line
+  per player/team.
+- Team games use shared team arrangement. Call
+  `_setup_team_manager_for_start(...)`; use `_get_team_turn_players(...)` when
+  seating affects turn order. Do not build per-game team selection UI.
 
-# Gameplay messages
-<type>-<event> = <Message with $player, $tile, etc.>
-```
+## Persistence and Data Lifecycle
 
-### 9.3 Rules
+Any persistent feature must define and test:
 
-- Every key in the EN file must have a corresponding key in the VI file
-- Use Fluent plurals for countable nouns: `{ $count -> [one] tile *[other] tiles }`
-- Use `Localization.get(locale, key, **kwargs)` for formatting
-- Use `Localization.format_list_and(locale, items)` for joining lists with localized "and"
-- Add shared score unit labels to `server/locales/<locale>/games.ftl` when multiple games can reuse them. Add game-specific unit labels only when the wording is unique to that game.
+- what is stored and why
+- lifespan/retention
+- cleanup/pruning of stale data
+- account-deletion behavior
+- migration/backward compatibility when schemas or supported games change
 
----
+Do not add database rows, tables, saved runtime state, notifications, chat logs,
+tokens, invites, moderation records, or similar data without this lifecycle.
 
-## 10. Documentation
+## Server, Web, Desktop, and Mobile Rules
 
-### 10.1 File Locations
+- Server navigation uses `_nav_push`, `_nav_back`, `_nav_refresh`, and
+  `_restore_frame`; action handlers should not call `_show_*()` directly.
+- Use `_enter_input_state(...)` / `server.enter_input_state(...)` for editbox
+  input state instead of mutating `_user_states`.
+- Reconnect restoration and ghost cleanup must route through centralized restore
+  code.
+- Web client must never use `innerHTML` with server-controlled content.
+- Web speech prefs are `speech_mode`, `speech_voice`, `speech_rate`.
+- Mobile speech prefs are `mobile_tts_engine`, `mobile_tts_voice`,
+  `mobile_tts_rate`; unavailable synced voices/engines must fall back safely.
+- Mobile connects as `client: "mobile"`, is treated as touch, uses SecureStore
+  for credentials, AsyncStorage for local prefs, and must enforce mandatory APK
+  updates on version/sound-pack mismatch.
+- Desktop passwords live only in OS keyring. Saved microphone devices must fall
+  back to system default if unavailable.
 
-- `server/documentation/content/en/games/<game_type>.md`
-- `server/documentation/content/vi/games/<game_type>.md`
+## New Game Requirements
 
-### 10.2 Required Sections
+Files normally required:
 
-1. **Game title** — bold, first line
-2. **Overview** — 1-2 sentence summary
-3. **Gameplay** — How a round works
-4. **Special mechanics** — Opening rules, drawing, blocking, etc.
-5. **Scoring** — How points are calculated
-6. **Customizable Options** — Every option with default and range
-7. **Keyboard Shortcuts** — Every game-specific keybind
+- `server/games/<type>/__init__.py`
+- `server/games/<type>/game.py`
+- optional `server/games/<type>/bot.py`
+- `server/locales/en/<type>.ftl`
+- `server/locales/vi/<type>.ftl`
+- `server/documentation/content/en/games/<type>.md`
+- `server/documentation/content/vi/games/<type>.md`
+- `server/tests/test_<type>.py`
 
-### 10.3 Formatting Convention
+Also register the game in `server/games/__init__.py`.
 
-Documentation uses escaped markdown: `\*\*Bold\*\*`, `\* Bullet item`. This is the established pattern — follow it exactly.
+Documentation must follow established game docs: escaped markdown bold,
+overview, gameplay, special mechanics, scoring, customizable options with
+defaults/ranges, and game-specific keyboard shortcuts.
 
----
+Tests should cover registration/default options, pre-start validation, core
+mechanics, scoring/scoreless behavior, bot completion, touch visibility/order,
+keybind collisions, sound/TTS paths, transitions, and game completion.
 
-## 11. Testing
+## Code Style
 
-### 11.1 File Location
-
-`server/tests/test_<game_type>.py`
-
-### 11.2 Standard Test Helpers
-
-```python
-def make_game(player_count=2, start=False, **option_overrides) -> MyGame:
-    game = MyGame(options=MyGameOptions(**option_overrides))
-    game.setup_keybinds()
-    for i in range(player_count):
-        name = f"Player{i + 1}"
-        game.add_player(name, MockUser(name, uuid=f"p{i + 1}"))
-    game.host = "Player1"
-    if start:
-        game.on_start()
-    return game
-
-def advance_until(game, condition, max_ticks=400) -> bool:
-    for _ in range(max_ticks):
-        if condition():
-            return True
-        game.on_tick()
-    return condition()
-```
-
-### 11.3 Required Test Coverage
-
-- Game registration and default options
-- Pre-start validation (valid and invalid cases)
-- Core gameplay mechanics (play, draw, pass/knock)
-- Scoring (round win, blocked round, team mode, score units, scoreless hotkey behavior when applicable)
-- Bot AI completes a game without infinite loops
-- Web client turn menu visibility and ordering
-- Keybind registration (no reserved key collisions)
-- Sound and TTS broadcast to all players
-- Round transitions and match completion
-
-### 11.4 Bot Test Rule
-
-Always test that a bot game completes: use `advance_until` with a high `max_ticks` and assert the game finishes. Bot infinite loops are a critical regression.
-
----
-
-## 12. Code Style Rules
-
-### 12.1 Imports
-
-- **All imports at module level.** No in-function imports anywhere in the server codebase.
-- Only exception: `main()` in `client/client.py` where CWD must be set first.
-
-### 12.2 Naming
-
-- Game class: `<Name>Game` (e.g., `DominosGame`)
-- Player class: `<Name>Player` (e.g., `DominosPlayer`)
-- Options class: `<Name>Options` (e.g., `DominosOptions`)
-- Game type string: lowercase, no separators (e.g., `"dominos"`, `"crazyeights"`)
-- Action IDs: `snake_case` (e.g., `"play_tile"`, `"draw"`, `"read_hand"`)
-- Handler methods: `_action_<id>` (e.g., `_action_draw`)
-- Visibility methods: `_is_<id>_hidden` (e.g., `_is_draw_hidden`)
-- Enabled methods: `_is_<id>_enabled` (e.g., `_is_draw_enabled`)
-
-### 12.3 General
-
-- Keep game logic in `game.py` per game (bot AI can live in a separate `bot.py`)
-- Use `get_active_players()` — never iterate `self.players` for gameplay logic
-- Always call `super().on_tick()` and `self.process_scheduled_sounds()` in `on_tick`
-- Always call `super().setup_keybinds()` in `setup_keybinds`
-- Always call `super().create_standard_action_set(player)` when overriding
-- Never use `innerHTML` with server data in the web client — use `textContent`
-
-### 12.4 Persistence & Data Lifecycle
-
-Any new database-backed feature must define its data lifecycle up front. Do not add persistent storage without also deciding how that data ages, expires, or gets removed.
-
-Required review for every new persistent table, column, or record type:
-- **Stored data**: Document exactly what is stored and why it must persist.
-- **Lifespan**: Decide whether the data is permanent, bounded, or time-limited.
-- **Cleanup mechanism**: If the data can become stale, define how it is cleaned up. This can be immediate deletion on use, periodic pruning at startup, scheduled cleanup, bounded retention, or explicit admin/user deletion.
-- **Account deletion behavior**: Decide whether the data should be deleted, anonymized, or preserved when an account is removed. Never leave orphaned rows behind.
-- **Testing**: Add tests that prove the cleanup path works, especially for expiry, stale-row pruning, and account deletion behavior.
-
-Examples of features that require this review include chat logs, notifications, invitations, friend requests, password reset tokens, moderation records, saved states, temporary UI records, and any future time-bound or accumulative data.
-
-Rule: if a feature can create rows that are no longer useful after some time or after a user is deleted, the implementation is incomplete until its cleanup policy and tests are in place.
-
----
-
-## 13. New Game Checklist
-
-Use this checklist when implementing a new game. Every item is mandatory.
-
-### Architecture
-- [ ] Game class is a `@dataclass` decorated with `@register_game`
-- [ ] Game inherits from `Game` (which brings all 14 mixins), plus optional mixins like `GridGameMixin`, `TurnTimerMixin` as needed
-- [ ] Custom `Player` subclass with `DataClassJSONMixin`-compatible fields
-- [ ] Custom data model classes (cards/tiles/tokens) are `@dataclass` with `DataClassJSONMixin`
-- [ ] `GameOptions` subclass uses declarative `option_field()` for every setting
-- [ ] Game registered in `server/games/__init__.py` (import + `__all__`)
-
-### Game Logic
-- [ ] `on_start` sets `status = "playing"`, calls `_sync_table_status()`, initializes round
-- [ ] `on_tick` calls `super().on_tick()` and `self.process_scheduled_sounds()`
-- [ ] `bot_think` returns a valid action ID for every possible game state
-- [ ] Bot game tested to completion — no infinite loops
-- [ ] `build_game_result` uses `get_active_players()` for player list
-- [ ] `prestart_validate` checks team mode and any option conflicts
-- [ ] Score actions use one TTS line per player/team and the correct localized score unit
-- [ ] Scoreless games hide score actions and silently ignore `s` / `shift+s`
-
-### Actions & Keybinds
-- [ ] `setup_keybinds` calls `super().setup_keybinds()` first
-- [ ] No keybind collisions with reserved keys (see Section 4.3)
-- [ ] `include_spectators` agrees between `Action` and `Keybind`
-- [ ] Dynamic actions use `_sync_turn_actions` pattern
-- [ ] Player-private actions: `include_spectators=False`
-- [ ] Public info actions: `include_spectators=True`
-- [ ] Turn actions have `show_in_actions_menu=False` (see Section 3.2)
-- [ ] Info/status actions defined in `create_standard_action_set`, not turn set (see Section 3.2)
-
-### Options
-- [ ] Every option has working game logic (no dead options)
-- [ ] Every option has `change_msg` defined in both EN and VI `.ftl` files
-- [ ] `MenuOption` has `choice_labels` mapping values to locale keys
-- [ ] `prestart_validate` catches invalid combinations
-
-### Web/Mobile UI
-- [ ] Reaction actions visible in Turn Menu for touch clients during active windows
-- [ ] Utility actions (read hand, sort, etc.) visible in Turn Menu for touch clients
-- [ ] Turn Menu ordered: reactions → cards/tiles → utilities
-- [ ] Standard actions reordered for touch clients: game-specific → `check_scores` → `whose_turn` → `whos_at_table` (see Section 7.5)
-- [ ] `whose_turn`, `whos_at_table` visible for touch clients; `check_scores` visible if game tracks scores
-
-### Audio & Accessibility
-- [ ] Every game state change announced via TTS (`broadcast_l` / `speak_l`)
-- [ ] Correct `buffer=` on every TTS call (see Section 6.2)
-- [ ] Sound effects for key events (play, draw, win, blocked, etc.)
-- [ ] Information actions queryable by keybind (read hand, read board, etc.)
-
-### Localization
-- [ ] `game-name-<type>` key in both EN and VI `.ftl` files
-- [ ] All option keys, action labels, gameplay messages in both locales
-- [ ] All keys in EN file have corresponding keys in VI file
-- [ ] Option `choice_labels` keys defined in both locales
-- [ ] Custom score units define or reuse localized `game-score-unit-*` keys in both EN and VI
-
-### Documentation
-- [ ] EN and VI documentation files in `server/documentation/content/`
-- [ ] Covers: overview, gameplay, scoring, all options with defaults, all keybinds
-- [ ] Uses `\*\*bold\*\*` escaped markdown format
-
-### Testing
-- [ ] Test file at `server/tests/test_<game_type>.py`
-- [ ] Registration and default options test
-- [ ] Pre-start validation tests
-- [ ] Core gameplay tests (play, draw/knock, scoring)
-- [ ] Bot completion test
-- [ ] Touch-client visibility tests
-- [ ] Keybind collision test
-- [ ] All tests pass: `cd server && pytest tests/test_<game_type>.py`
-
-### Project Files
-- [ ] Game count updated in `CLAUDE.md` and `README.md`
-- [ ] Game added to `README.md` Game Catalog (correct category)
+- Module-level imports only, except `main()` in `client/client.py` where CWD
+  setup must happen first.
+- Prefer existing helpers and local patterns over new abstractions.
+- Keep edits scoped; do not refactor unrelated code.
+- Game classes: `<Name>Game`; player classes: `<Name>Player`; options:
+  `<Name>Options`; type ids lowercase without separators; action ids
+  `snake_case`.
+- Handler names: `_action_<id>`; visibility: `_is_<id>_hidden`; enabled:
+  `_is_<id>_enabled`.
+- Use structured parsers/APIs where available; avoid ad-hoc string parsing.
+- Update `CLAUDE.md` and `README.md` when catalog counts or user-facing catalog
+  data changes.
