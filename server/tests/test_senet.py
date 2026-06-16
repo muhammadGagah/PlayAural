@@ -111,14 +111,6 @@ def test_score_shortcuts_use_standard_s_keys() -> None:
     assert user is not None
     p1 = game._get_player_by_num(1)
     p2 = game._get_player_by_num(2)
-    expected = Localization.get(
-        "en",
-        "senet-score",
-        p1=p1.name if p1 else "?",
-        off1=game.game_state.off[1],
-        p2=p2.name if p2 else "?",
-        off2=game.game_state.off[2],
-    )
     detailed_expected = [
         Localization.get(
             "en",
@@ -142,7 +134,7 @@ def test_score_shortcuts_use_standard_s_keys() -> None:
 
     user.clear_messages()
     game.handle_event(player, {"type": "keybind", "key": "s"})
-    assert expected in user.get_spoken_messages()
+    assert user.get_spoken_messages() == detailed_expected
 
     user.clear_messages()
     game.handle_event(player, {"type": "keybind", "key": "s", "shift": True})
@@ -151,7 +143,7 @@ def test_score_shortcuts_use_standard_s_keys() -> None:
 
     user.clear_messages()
     game.handle_event(player, {"type": "keybind", "key": "v"})
-    assert expected not in user.get_spoken_messages()
+    assert user.get_spoken_messages() == []
 
 
 def test_senet_refresh_does_not_overwrite_global_menus() -> None:

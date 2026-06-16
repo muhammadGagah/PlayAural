@@ -66,7 +66,6 @@ senet-check-status = Trạng thái
 senet-check-sticks = Kết quả que
 senet-next-piece = Quân tiếp theo
 senet-previous-piece = Quân trước
-senet-score = { $p1 }: { $off1 } quân. { $p2 }: { $off2 } quân.
 senet-score-line = { $player }: { $off } quân.
 
 # Lỗi

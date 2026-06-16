@@ -66,7 +66,6 @@ senet-check-status = Status
 senet-check-sticks = Sticks
 senet-next-piece = Next piece
 senet-previous-piece = Previous piece
-senet-score = { $p1 }: { $off1 } off. { $p2 }: { $off2 } off.
 senet-score-line = { $player }: { $off } off.
 
 # Errors

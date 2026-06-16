@@ -697,12 +697,16 @@ class SenetGame(Game):
         return [
             Localization.get(
                 locale,
-                "senet-score",
-                p1=d.get("p1_name", "?"),
-                off1=d.get("p1_off", 0),
-                p2=d.get("p2_name", "?"),
-                off2=d.get("p2_off", 0),
-            )
+                "senet-score-line",
+                player=d.get("p1_name", "?"),
+                off=d.get("p1_off", 0),
+            ),
+            Localization.get(
+                locale,
+                "senet-score-line",
+                player=d.get("p2_name", "?"),
+                off=d.get("p2_off", 0),
+            ),
         ]
 
     # ======================================================================
@@ -737,17 +741,6 @@ class SenetGame(Game):
         else:
             user.speak_l("senet-sticks-none", buffer="game")
 
-    def _score_kwargs(self) -> dict:
-        gs = self.game_state
-        p1 = self._get_player_by_num(1)
-        p2 = self._get_player_by_num(2)
-        return {
-            "p1": p1.name if p1 else "?",
-            "off1": gs.off[1],
-            "p2": p2.name if p2 else "?",
-            "off2": gs.off[2],
-        }
-
     def _score_lines(self, locale: str) -> list[str]:
         gs = self.game_state
         p1 = self._get_player_by_num(1)
@@ -771,7 +764,8 @@ class SenetGame(Game):
         user = self.get_user(player)
         if not user:
             return
-        user.speak_l("senet-score", buffer="game", **self._score_kwargs())
+        for line in self._score_lines(user.locale):
+            user.speak(line, buffer="game")
 
     def _action_check_scores_detailed(self, player: Player, action_id: str) -> None:
         user = self.get_user(player)
