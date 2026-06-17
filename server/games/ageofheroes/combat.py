@@ -862,21 +862,25 @@ def execute_war_battle(game: AgeOfHeroesGame) -> None:
     war.battle_in_progress = True
     war.reset_round_rolls()
 
-    # Rebuild menus to show "Roll dice" button
-    game.refresh_menus()
-
-    # Jolt both bots to act immediately (set think ticks to 0)
+    # Focus human combatants on the new roll prompt; jolt bots to act immediately.
     active_players = game.get_active_players()
     if war.attacker_index < len(active_players):
         attacker = active_players[war.attacker_index]
         if attacker.is_bot:
             attacker.bot_think_ticks = 0
             attacker.bot_pending_action = None
+        else:
+            game.request_menu_focus(attacker, "war_roll_dice")
     if war.defender_index < len(active_players):
         defender = active_players[war.defender_index]
         if defender.is_bot:
             defender.bot_think_ticks = 0
             defender.bot_pending_action = None
+        else:
+            game.request_menu_focus(defender, "war_roll_dice")
+
+    # Rebuild menus to show "Roll dice" button.
+    game.refresh_menus()
 
 
 def finish_war_battle(game: AgeOfHeroesGame) -> None:

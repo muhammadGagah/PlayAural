@@ -5,7 +5,11 @@ from pathlib import Path
 from ..game_utils.actions import Visibility
 from ..games.ageofheroes.cards import Card, CardType, EventType, ResourceType
 from ..games.ageofheroes.bot import bot_execute_discard_excess
-from ..games.ageofheroes.combat import resolve_battle_round, return_surviving_forces
+from ..games.ageofheroes.combat import (
+    execute_war_battle,
+    resolve_battle_round,
+    return_surviving_forces,
+)
 from ..games.ageofheroes.construction import can_build, spend_resources
 from ..games.ageofheroes import game as ageofheroes_game_module
 from ..games.ageofheroes.game import (
@@ -125,6 +129,66 @@ def test_road_target_menu_focuses_first_target_when_opened() -> None:
     game.flush_menus()
 
     assert user.menus["turn_menu"]["selection_id"] == "road_target_0"
+
+
+def test_road_permission_prompt_focuses_first_response() -> None:
+    """A new road approval prompt should focus Approve for the responder."""
+    game = make_started_game()
+    builder, responder, _ = game.get_active_players()
+    responder_user = game.get_user(responder)
+    game.phase = GamePhase.PLAY
+    game.sub_phase = PlaySubPhase.ROAD_TARGET
+    game.set_turn_players(game.get_active_players())
+    builder.pending_road_targets = [(1, "right")]
+
+    game._action_select_road_target(builder, "road_target_0")
+    game.flush_menus()
+
+    assert game.sub_phase == PlaySubPhase.ROAD_PERMISSION
+    assert responder_user.menus["turn_menu"]["selection_id"] == "approve_road"
+
+
+def test_war_goal_menu_focuses_first_goal_after_target_selection() -> None:
+    """War goal focus should use real action ids even when goals are enum values."""
+    game = make_started_game(player_count=2)
+    attacker, defender = game.get_active_players()
+    user = game.get_user(attacker)
+    game.phase = GamePhase.PLAY
+    game.sub_phase = PlaySubPhase.WAR_DECLARE
+    game.current_day = 3
+    game.set_turn_players([attacker, defender])
+    attacker.pending_war_targets = [(1, defender)]
+    attacker.tribe_state.armies = 2
+    defender.tribe_state.cities = 1
+    defender.hand = [Card(id=41, card_type=CardType.RESOURCE, subtype=ResourceType.WOOD)]
+
+    game._action_select_war_target(attacker, "war_target_0")
+    game.flush_menus()
+
+    assert attacker.pending_war_goals == [WarGoal.CONQUEST, WarGoal.PLUNDER]
+    assert user.menus["turn_menu"]["selection_id"] == "war_goal_conquest"
+
+
+def test_war_battle_prompt_focuses_roll_for_combatants() -> None:
+    """Entering battle mode should land both human combatants on Roll dice."""
+    game = make_started_game(player_count=2)
+    attacker, defender = game.get_active_players()
+    attacker_user = game.get_user(attacker)
+    defender_user = game.get_user(defender)
+    game.phase = GamePhase.PLAY
+    game.set_turn_players([attacker, defender])
+    game.war_state.attacker_index = 0
+    game.war_state.defender_index = 1
+    game.war_state.goal = WarGoal.PLUNDER
+    game.war_state.attacker_armies = 1
+    game.war_state.defender_armies = 1
+
+    execute_war_battle(game)
+    game.flush_menus()
+
+    assert game.sub_phase == PlaySubPhase.WAR_BATTLE
+    assert attacker_user.menus["turn_menu"]["selection_id"] == "war_roll_dice"
+    assert defender_user.menus["turn_menu"]["selection_id"] == "war_roll_dice"
 
 
 def test_gold_wildcard_does_not_double_pay_explicit_gold() -> None:
@@ -352,6 +416,29 @@ def test_deny_road_request_resumes_bot_builder_construction(monkeypatch) -> None
     assert resumed == [(game, builder)]
 
 
+def test_offer_request_cancel_returns_focus_to_offer_list() -> None:
+    """Closing the request submenu should route focus back to an offerable card."""
+    game = make_started_game()
+    player = game.get_active_players()[0]
+    user = game.get_user(player)
+    game.phase = GamePhase.FAIR
+    game.set_turn_players([player])
+    player.hand = [
+        Card(id=601, card_type=CardType.RESOURCE, subtype=ResourceType.WOOD),
+        Card(id=602, card_type=CardType.RESOURCE, subtype=ResourceType.IRON),
+    ]
+
+    game._action_select_offer_card(player, "offer_card_0")
+    game.flush_menus()
+
+    assert user.menus["turn_menu"]["selection_id"] == "request_any"
+
+    game._action_cancel_offer_selection(player, "cancel_offer_selection")
+    game.flush_menus()
+
+    assert user.menus["turn_menu"]["selection_id"] == "offer_card_0"
+
+
 def _make_lobby_game(player_count: int = 3) -> AgeOfHeroesGame:
     """Build a game with players seated but still in the lobby (not started)."""
     game = AgeOfHeroesGame()
@@ -499,7 +586,26 @@ def test_war_force_menu_focuses_top_control_when_opened() -> None:
     game.flush_menus()
 
     assert game.sub_phase == PlaySubPhase.WAR_PREPARE_ATTACKER
-    assert user.menus["turn_menu"]["selection_id"] == "war_armies_add"
+    assert user.menus["turn_menu"]["selection_id"] == "war_armies_remove"
+
+
+def test_cancel_war_target_returns_focus_to_main_actions() -> None:
+    """Canceling a contextual prompt should not leave focus on a removed button."""
+    game = make_started_game(player_count=2)
+    attacker, defender = game.get_active_players()
+    user = game.get_user(attacker)
+    game.phase = GamePhase.PLAY
+    game.sub_phase = PlaySubPhase.WAR_DECLARE
+    game.current_day = 3
+    game.set_turn_players([attacker, defender])
+    attacker.pending_war_targets = [(1, defender)]
+    attacker.tribe_state.armies = 2
+
+    game._action_cancel_war_target(attacker, "cancel_war_target")
+    game.flush_menus()
+
+    assert game.sub_phase == PlaySubPhase.SELECT_ACTION
+    assert user.menus["turn_menu"]["selection_id"] == f"action_{ActionType.TAX_COLLECTION.value}"
 
 
 def test_olympics_prompts_human_defender_before_war_forces() -> None:

@@ -410,6 +410,7 @@ def execute_single_build(
                 target_user = game.get_user(target)
                 if target_user:
                     target_user.speak_l("ageofheroes-road-request-received", requester=player.name, buffer="game")
+                game._request_first_visible_focus(target, ("approve_road", "deny_road"))
 
                 # If target is also a bot, have them auto-respond
                 if target.is_bot:

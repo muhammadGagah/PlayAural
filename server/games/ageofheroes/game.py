@@ -813,20 +813,36 @@ class AgeOfHeroesGame(Game):
         player: AgeOfHeroesPlayer,
         action_ids: list[str] | tuple[str, ...],
     ) -> None:
-        """Focus the first currently visible action after an action-driven submenu change."""
+        """Focus the first usable action after an action-driven submenu change."""
         if player.is_bot:
             return
+        fallback_id: str | None = None
         for action_id in action_ids:
             action = self.find_action(player, action_id)
             if not action:
                 continue
             resolved = self.resolve_action(player, action)
-            if resolved.visible:
+            if not resolved.visible:
+                continue
+            if fallback_id is None:
+                fallback_id = action_id
+            if resolved.enabled:
                 self.request_menu_focus(player, action_id)
                 return
+        if fallback_id is not None:
+            self.request_menu_focus(player, fallback_id)
+
+    def _action_id_value(self, value: object) -> str:
+        return str(getattr(value, "value", value))
 
     def _construction_focus_candidates(self) -> list[str]:
         return [f"build_{building.value}" for building in BuildingType] + ["stop_building"]
+
+    def _main_action_focus_candidates(self) -> list[str]:
+        return [f"action_{action.value}" for action in ActionType]
+
+    def _offer_card_focus_candidates(self, player: AgeOfHeroesPlayer) -> list[str]:
+        return [f"offer_card_{i}" for i in range(len(player.hand))] + ["stop_trading"]
 
     def _war_target_focus_candidates(self, player: AgeOfHeroesPlayer) -> list[str]:
         return [f"war_target_{i}" for i in range(len(player.pending_war_targets))] + [
@@ -834,9 +850,10 @@ class AgeOfHeroesGame(Game):
         ]
 
     def _war_goal_focus_candidates(self, player: AgeOfHeroesPlayer) -> list[str]:
-        return [f"war_goal_{goal}" for goal in player.pending_war_goals] + [
-            "cancel_war_goal"
-        ]
+        return [
+            f"war_goal_{self._action_id_value(goal)}"
+            for goal in player.pending_war_goals
+        ] + ["cancel_war_goal"]
 
     def _road_target_focus_candidates(self, player: AgeOfHeroesPlayer) -> list[str]:
         return [f"road_target_{i}" for i in range(len(player.pending_road_targets))] + [
@@ -1577,7 +1594,8 @@ class AgeOfHeroesGame(Game):
         goal = action_id.replace("war_goal_", "")
 
         # Hide if not in available goals
-        if goal not in player.pending_war_goals:
+        available_goals = {self._action_id_value(value) for value in player.pending_war_goals}
+        if goal not in available_goals:
             return Visibility.HIDDEN
 
         return Visibility.VISIBLE
@@ -2725,6 +2743,7 @@ class AgeOfHeroesGame(Game):
                 if user:
                     user.speak_l("ageofheroes-road-no-target", buffer="game")
                 self.sub_phase = PlaySubPhase.SELECT_ACTION
+                self._request_first_visible_focus(player, self._main_action_focus_candidates())
                 self.refresh_menus()
                 return
 
@@ -2819,6 +2838,8 @@ class AgeOfHeroesGame(Game):
             target_user = self.get_user(target_player)
             if target_user:
                 target_user.speak_l("ageofheroes-road-request-received", requester=player.name, buffer="game")
+            if isinstance(target_player, AgeOfHeroesPlayer):
+                self._request_first_visible_focus(target_player, ("approve_road", "deny_road"))
 
         self.refresh_menus()
 
@@ -3029,7 +3050,8 @@ class AgeOfHeroesGame(Game):
         # Extract goal from action_id
         goal = action_id.replace("war_goal_", "")
 
-        if goal not in player.pending_war_goals:
+        available_goals = {self._action_id_value(value) for value in player.pending_war_goals}
+        if goal not in available_goals:
             return
 
         # Get the target
@@ -3080,6 +3102,7 @@ class AgeOfHeroesGame(Game):
 
         # Return to action selection
         self.sub_phase = PlaySubPhase.SELECT_ACTION
+        self._request_first_visible_focus(player, self._main_action_focus_candidates())
         self.refresh_menus()
 
     def _action_cancel_war_goal(self, player: Player, action_id: str) -> None:
@@ -3407,6 +3430,7 @@ class AgeOfHeroesGame(Game):
             player.pending_war_heroes_as_generals = 0
             self.war_state.reset()
             self.sub_phase = PlaySubPhase.SELECT_ACTION
+            self._request_first_visible_focus(player, self._main_action_focus_candidates())
             self.refresh_menus()
         elif self.sub_phase == PlaySubPhase.WAR_PREPARE_DEFENDER:
             # Defender can't cancel - they must respond
@@ -3415,6 +3439,7 @@ class AgeOfHeroesGame(Game):
             player.pending_war_generals = 0
             player.pending_war_heroes_as_armies = 0
             player.pending_war_heroes_as_generals = 0
+            self._request_first_visible_focus(player, self._war_force_focus_candidates())
             self.refresh_menus()
 
     def _action_select_offer_card(self, player: Player, action_id: str) -> None:
@@ -3520,6 +3545,7 @@ class AgeOfHeroesGame(Game):
 
         # Clear the pending offer
         player.pending_offer_card_index = -1
+        self._request_first_visible_focus(player, self._offer_card_focus_candidates(player))
         self.refresh_menus()
 
     def _action_cancel_offer_selection(self, player: Player, action_id: str) -> None:
@@ -3528,6 +3554,7 @@ class AgeOfHeroesGame(Game):
             return
 
         player.pending_offer_card_index = -1
+        self._request_first_visible_focus(player, self._offer_card_focus_candidates(player))
         self.refresh_menus()
 
     def _action_discard_card(self, player: Player, action_id: str) -> None:
@@ -3694,6 +3721,7 @@ class AgeOfHeroesGame(Game):
 
         # Return to action selection
         self.sub_phase = PlaySubPhase.SELECT_ACTION
+        self._request_first_visible_focus(player, self._main_action_focus_candidates())
         self.refresh_menus()
 
     def _action_cancel_disaster(self, player: Player, action_id: str) -> None:
@@ -3714,6 +3742,7 @@ class AgeOfHeroesGame(Game):
 
         # Return to action selection
         self.sub_phase = PlaySubPhase.SELECT_ACTION
+        self._request_first_visible_focus(player, self._main_action_focus_candidates())
         self.refresh_menus()
 
     def _start_play_phase(self) -> None:
