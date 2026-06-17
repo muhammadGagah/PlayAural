@@ -125,6 +125,53 @@ class TestTableInviteReclaim:
         )
 
     @pytest.mark.asyncio
+    async def test_table_invite_info_line_does_not_dismiss_prompt(self):
+        host = self._create_online_user("Host")
+        guest = self._create_online_user("Guest")
+        seated = self._create_online_user("Seated")
+        table, _ = self._create_started_table(host, seated)
+
+        await self.server._send_table_invite(host, table, guest)
+        state = dict(self.server._user_states[guest.username])
+
+        host.clear_messages()
+        guest.clear_messages()
+        await self.server._handle_table_invite_selection(guest, "", state)
+
+        assert self.server._pending_invites[guest.username]["table_id"] == table.table_id
+        assert self.server._user_states[guest.username]["menu"] == "table_invite_prompt"
+        assert "table_invite_prompt" in guest.menus
+        assert "host-invite-declined" not in host.get_spoken_messages()
+
+        self.server._cancel_invite(guest.username)
+
+    @pytest.mark.asyncio
+    async def test_second_table_invite_does_not_replace_pending_invite(self):
+        first_host = self._create_online_user("FirstHost")
+        second_host = self._create_online_user("SecondHost")
+        guest = self._create_online_user("Guest")
+        first_seated = self._create_online_user("FirstSeated")
+        second_seated = self._create_online_user("SecondSeated")
+        first_table, _ = self._create_started_table(first_host, first_seated)
+        second_table, _ = self._create_started_table(second_host, second_seated)
+
+        await self.server._send_table_invite(first_host, first_table, guest)
+        pending_task = self.server._pending_invites[guest.username]["task"]
+        second_host.clear_messages()
+
+        sent = await self.server._send_table_invite(second_host, second_table, guest)
+
+        assert sent is False
+        assert self.server._pending_invites[guest.username]["table_id"] == first_table.table_id
+        assert self.server._pending_invites[guest.username]["task"] is pending_task
+        assert second_host.get_last_spoken() == Localization.get(
+            second_host.locale,
+            "host-invite-already-pending",
+        )
+
+        self.server._cancel_invite(guest.username)
+
+    @pytest.mark.asyncio
     async def test_table_invite_waits_until_private_message_input_finishes(self):
         host = self._create_online_user("Host")
         guest = self._create_online_user("Guest")

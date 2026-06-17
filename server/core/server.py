@@ -5287,15 +5287,20 @@ PlayAural Server
             self._nav_refresh(user, self._show_host_invite_menu, table)
             return
 
-        await self._send_table_invite(user, table, invitee_user)
-        user.speak_l("host-invite-sent", buffer="system", player=invitee_name)
-        self._nav_refresh(user, self._show_host_management_menu, table)
+        sent = await self._send_table_invite(user, table, invitee_user)
+        if sent:
+            user.speak_l("host-invite-sent", buffer="system", player=invitee_name)
+            self._nav_refresh(user, self._show_host_management_menu, table)
 
     async def _send_table_invite(
         self, host_user: NetworkUser, table: "Table", invitee_user: NetworkUser
-    ) -> None:
+    ) -> bool:
         """Send a table invite and schedule its 30-second expiry."""
         invitee_name = invitee_user.username
+        if invitee_name in self._pending_invites:
+            host_user.speak_l("host-invite-already-pending", buffer="system")
+            return False
+
         game_class = get_game_class(table.game_type)
         game_name = (
             Localization.get(invitee_user.locale, game_class.get_name_key())
@@ -5319,9 +5324,10 @@ PlayAural Server
                 host=host_user.username,
                 game=game_name,
             )
-            return
+            return True
 
         self._show_table_invite_prompt(invitee_user, self._pending_invites[invitee_name])
+        return True
 
     def _show_table_invite_prompt(
         self,
@@ -5348,7 +5354,7 @@ PlayAural Server
             game=game_name,
         )
         items = [
-            MenuItem(text=invite_text, id=""),  # Static info line (unclickable)
+            MenuItem(text=invite_text),  # Static info line; server ignores read-only activation.
             MenuItem(text=Localization.get(invitee_user.locale, "invite-accept"), id="accept"),
             MenuItem(text=Localization.get(invitee_user.locale, "invite-decline"), id="decline"),
         ]
@@ -5392,7 +5398,10 @@ PlayAural Server
         """Auto-expire an invite after 30 seconds."""
         try:
             await asyncio.sleep(30.0)
-            invite = self._pending_invites.pop(invitee_name, None)
+            invite = self._pending_invites.get(invitee_name)
+            if not invite or invite.get("table_id") != table_id:
+                return
+            self._pending_invites.pop(invitee_name, None)
             invitee_user = self._users.get(invitee_name)
             if not invitee_user:
                 return
@@ -5406,8 +5415,11 @@ PlayAural Server
         except asyncio.CancelledError:
             pass
 
-    def _cancel_invite(self, invitee_name: str) -> None:
+    def _cancel_invite(self, invitee_name: str, *, table_id: str | None = None) -> None:
         """Cancel a pending invite and stop its expiry task."""
+        invite = self._pending_invites.get(invitee_name)
+        if table_id is not None and invite and invite.get("table_id") != table_id:
+            return
         invite = self._pending_invites.pop(invitee_name, None)
         if invite:
             task = invite.get("task")
@@ -5421,7 +5433,15 @@ PlayAural Server
         table_id = state.get("table_id")
         prev_state = state.get("prev_state", {})
 
-        self._cancel_invite(user.username)
+        if selection_id not in ("accept", "decline"):
+            return
+
+        invite = self._pending_invites.get(user.username)
+        if not invite or invite.get("table_id") != table_id:
+            self._restore_menu_from_state(user, prev_state)
+            return
+
+        self._cancel_invite(user.username, table_id=table_id)
 
         table = self._tables.get_table(table_id)
 
