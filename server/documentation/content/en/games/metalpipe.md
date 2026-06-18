@@ -1,61 +1,60 @@
 \*\*Metal Pipe\*\*
 
+Metal Pipe is a short automatic luck game for 2 to 8 players. It is intentionally silly and has no strategic decisions after the host starts the game: the pipe chooses a player to swing, chooses a target, plays the bonk, and declares the winner.
 
-
-Metal Pipe is a zero-skill joke game. A random player picks up a metal pipe and whacks another random player over the head with it. You press start and find out what happens.
-
-
+The polish goal for this game is clarity, not complexity. Every result is random, so the game focuses on fast audio feedback, clear elimination announcements, and touch-friendly status controls.
 
 \*\*Gameplay\*\*
 
+When the game starts, all active players are marked as standing. The game then schedules the bonk sequence automatically.
 
+For each bonk:
 
-When the game starts, everything plays out automatically. No player input is required at any point — you are a spectator of your own fate.
+\* A random standing player becomes the bonker.
+\* A target is chosen from the standing players.
+\* If self-bonks are allowed, the bonker may accidentally become the target.
+\* The target is eliminated.
 
+No player has a manual turn during the bonk sequence. The \*\*Whose turn\*\* command explains that Metal Pipe is resolving automatically.
 
+\*\*Single Bonk Mode\*\*
 
-A random player is chosen as the bonker. A random player, possibly the same one, is chosen as the bonked. The bonker smacks the bonked over the head with a metal pipe, and the bonked is eliminated.
+Single bonk mode is the default.
 
+\* If the bonker hits someone else, the bonker wins.
+\* If the bonker hits themselves, everyone else wins.
 
+This mode is best when you want a very fast table gag.
 
-In single bonk mode (the default), that is it. One bonk, one victim, game over. The bonker wins — unless they bonked themselves, in which case everyone else wins.
+\*\*Multiple Bonks Mode\*\*
 
+When \*\*Multiple bonks\*\* is enabled, the sequence continues after each elimination. New bonkers and targets are chosen only from players still standing. The game ends when one player remains standing, and that player wins.
 
+If self-bonks are enabled in this mode, a player can eliminate themselves during the sequence.
 
-In multiple bonks mode, the carnage continues. After each bonk, the eliminated player is removed and new bonker and victim are chosen from the survivors. This repeats until only one player remains standing, and that last survivor wins.
+\*\*Status and Touch Controls\*\*
 
+Touch clients can always access the standard table controls while the game is running:
 
+\* \*\*View pipe status:\*\* Opens a live status panel showing the mode, bonk count, last bonk, and each player's standing/eliminated state.
+\* \*\*Whose turn:\*\* Explains that the game is automatic and reports how many players are still standing.
+\* \*\*Who is at the table:\*\* Reads the current table members and spectators.
 
 \*\*Game Options\*\*
 
+\* \*\*Multiple Bonks:\*\* Default: off. When off, a single bonk decides the result. When on, bonks continue until only one player remains.
+\* \*\*Allow Self-Bonk:\*\* Default: on. When on, the bonker can also be selected as the target. When off, the bonker always hits someone else.
 
+These options do not conflict with each other. Every combination is supported.
 
-The host can configure these settings at the table before starting:
+\*\*Personal Game Options\*\*
 
-\* \*\*Multiple Bonks:\*\* Off by default. When disabled, a single bonk determines the winner. When enabled, bonking continues round after round until only one player remains.
-
-\* \*\*Allow Self-Bonk:\*\* On by default. When enabled, the randomly chosen bonker can accidentally bonk themselves, which means everyone else wins instead. When disabled, the bonker always hits someone else.
-
-
-
-\*\*Example Turn\*\*
-
-
-
-The game starts. Everything happens on its own.
-
-
-
-The game announces: "Alice hits Bob over the head with a metal pipe." Bob is eliminated.
-
-
-
-In single bonk mode, Alice wins. In multiple bonks mode, the remaining players continue, and the cycle repeats until one player is left.
-
-
+\* \*\*Brief announcements:\*\* Shortens bonk and winner announcements while keeping the bonker, target, and elimination result clear.
+\* \*\*Confirm risky actions:\*\* Not used. Metal Pipe has no manual risky gameplay action after the host starts the game.
 
 \*\*Keyboard Shortcuts\*\*
 
+\* \*\*C:\*\* View pipe status.
+\* \*\*T:\*\* Check whose turn or automated phase.
 
-
-There are no game-specific keyboard shortcuts. Metal Pipe requires no player input once it starts.
+There are no manual bonk actions. Once the game starts, the pipe handles the outcome.
