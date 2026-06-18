@@ -1,82 +1,61 @@
-\*\*Trái Phải Giữa (Left Right Center)\*\*
+\*\*Trái, Giữa, Phải\*\*
 
+Trái, Giữa, Phải (LCR) là trò chơi xúc xắc nhanh, thiên về may mắn, dành cho 3 đến 20 người. Chip được chuyển quanh bàn cho đến khi chỉ còn một người giữ chip. Người đó thắng và nhận toàn bộ hũ giữa.
 
+\*\*Chuẩn bị\*\*
 
-Trái Phải Giữa là một trò chơi xúc xắc nhanh dựa trên may mắn, nơi các chip sẽ được chuyển quanh bàn cho đến khi chỉ còn duy nhất một người chơi sở hữu chip.
+Mỗi người bắt đầu với số chip bằng nhau. Luật tiêu chuẩn dùng 3 chip cho mỗi người. Lượt chơi đi lần lượt theo vị trí ngồi quanh bàn.
 
+\*\*Một lượt chơi\*\*
 
+Trong lượt của mình, bạn gieo tối đa 3 viên xúc xắc:
 
-Trong mỗi lượt, bạn sẽ gieo tối đa ba viên xúc xắc sáu mặt. Mỗi viên xúc xắc có các mặt: Trái, Phải, Giữa và 3 mặt Chấm (không có tác dụng). Các mặt Trái sẽ chuyển chip cho người bên trái bạn, mặt Phải chuyển cho người bên phải, mặt Giữa chuyển chip vào hũ ở giữa (loại khỏi cuộc chơi), và mặt Chấm có nghĩa là bạn được giữ lại chip đó.
+\* Có từ 3 chip trở lên: gieo 3 viên.
 
+\* Có 2 chip: gieo 2 viên.
 
+\* Có 1 chip: gieo 1 viên.
 
-Người cuối cùng còn giữ chip sẽ giành chiến thắng.
+\* Không còn chip: hệ thống tự động bỏ qua lượt.
 
+Hết chip không có nghĩa là bị loại. Ở lượt sau, người ngồi cạnh vẫn có thể chuyển chip cho bạn.
 
+Mỗi viên xúc xắc có một mặt Trái, một mặt Giữa, một mặt Phải và ba mặt Chấm:
 
-\*\*Cách chơi\*\*
+\* \*\*Trái:\*\* Chuyển một chip cho người ngồi bên trái.
 
+\* \*\*Giữa:\*\* Bỏ một chip vào hũ giữa. Chip trong hũ giữa không quay lại cuộc chơi.
 
+\* \*\*Phải:\*\* Chuyển một chip cho người ngồi bên phải.
 
-PlayAural hỗ trợ từ 2 đến 20 người chơi cho trò chơi này. Khi bắt đầu, mỗi người nhận được một số lượng chip nhất định (mặc định là 3, có thể chỉnh từ 1 đến 10). Thứ tự lượt chơi diễn ra xoay vòng quanh bàn.
+\* \*\*Chấm:\*\* Giữ chip; viên xúc xắc đó không làm chip di chuyển.
 
-
-
-Trong lượt của mình:
-
-Bạn gieo số lượng xúc xắc tương ứng với số chip bạn có, nhưng tối đa là 3 viên.
-
-\* Nếu bạn có từ 3 chip trở lên, bạn gieo 3 viên.
-
-\* Nếu bạn có 2 chip, bạn gieo 2 viên.
-
-\* Nếu bạn có 1 chip, bạn gieo 1 viên.
-
-\* Nếu bạn có 0 chip, bạn sẽ bị nhảy qua lượt, nhưng bạn chưa hẳn đã thua vì người khác vẫn có thể chuyển chip cho bạn sau đó.
-
-
-
-Mỗi mặt xúc xắc sẽ di chuyển một chip:
-
-\* \*\*Trái (Left):\*\* Chuyển 1 chip cho người chơi bên trái bạn.
-
-\* \*\*Phải (Right):\*\* Chuyển 1 chip cho người chơi bên phải bạn.
-
-\* \*\*Giữa (Center):\*\* Bỏ 1 chip vào hũ giữa.
-
-\* \*\*Chấm (Dot):\*\* Giữ lại chip đó (không di chuyển).
-
-
-
-\*\*Ví dụ một lượt chơi\*\*
-
-
-
-Bạn đang có 3 chip và gieo được: \*\*Trái, Giữa, Chấm\*\*.
-
-1\. 1 chip được chuyển cho người bên trái.
-
-2\. 1 chip được bỏ vào hũ giữa.
-
-3\. 1 chip bạn được giữ lại.
-
-Bạn kết thúc lượt với 1 chip còn lại.
-
-
+Toàn bộ kết quả được xử lý từ cùng một lần gieo. Nút Gieo xúc xắc sẽ bị khóa trong lúc hệ thống chuyển chip và phát âm thanh, tránh việc gieo trùng do bấm liên tục.
 
 \*\*Chiến thắng\*\*
 
+Trò chơi kết thúc ngay khi chỉ còn một người chơi đang hoạt động có chip. Người thắng giữ số chip trước mặt và nhận toàn bộ chip trong hũ giữa.
 
+\*\*Tùy chọn trò chơi\*\*
 
-Trò chơi kết thúc ngay lập tức khi chỉ còn một người chơi duy nhất có chip. Người đó thắng cuộc, bất kể có bao nhiêu chip đang nằm trong hũ giữa.
+\* \*\*Số chip ban đầu:\*\* Từ 1 đến 10 chip cho mỗi người. Mặc định: 3.
 
+Đây là tùy chọn thiết lập duy nhất nên trò chơi không có tổ hợp tùy chọn xung đột.
 
+\*\*Tùy chọn cá nhân\*\*
+
+\* \*\*Thông báo ngắn gọn:\*\* Rút gọn thông báo lần gieo và chuyển chip nhưng vẫn giữ đủ người gieo, hướng chuyển, người nhận và số chip.
+
+\* \*\*Xác nhận hành động rủi ro:\*\* Không áp dụng. Gieo xúc xắc là bắt buộc và trò chơi không có hành động phá hủy tùy chọn nào cần xác nhận.
 
 \*\*Phím tắt bàn phím\*\*
 
+\* \*\*R:\*\* Gieo số xúc xắc cần thiết.
 
+\* \*\*C:\*\* Đọc số chip trong hũ giữa.
 
-\* \*\*R:\*\* Gieo xúc xắc.
+\* \*\*D:\*\* Đọc lần gieo gần nhất.
 
-\* \*\*C:\*\* Kiểm tra số chip trong hũ giữa.
+\* \*\*S:\*\* Đọc riêng số chip hiện tại của từng người.
 
+\* \*\*Shift+S:\*\* Mở bảng chip chi tiết được cập nhật trực tiếp.

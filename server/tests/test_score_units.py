@@ -115,8 +115,8 @@ def test_games_with_non_point_scores_declare_score_unit(game_cls, unit_key) -> N
         (
             LeftRightCenterGame,
             {"final_chips": {"Alice": 1, "Bob": 2}, "center_pot": 3},
-            ["Alice: 1 chip", "Bob: 2 chips", "3 chips in the center."],
-            ["Alice: 1 chip", "Bob: 2 chip", "3 chip ở giữa."],
+            ["Alice: 1 chip", "Bob: 2 chips", "Center pot: 3 chips."],
+            ["Alice: 1 chip", "Bob: 2 chip", "Hũ giữa: 3 chip."],
         ),
         (
             LudoGame,

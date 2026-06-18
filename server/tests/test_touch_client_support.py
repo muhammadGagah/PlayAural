@@ -372,7 +372,7 @@ def test_rollingballs_shortcut_utilities_are_touch_only_turn_buttons() -> None:
     [
         (BunkoGame, 2, "roll"),
         (FarkleGame, 2, "roll"),
-        (LeftRightCenterGame, 2, "roll"),
+        (LeftRightCenterGame, 3, "roll"),
         (LudoGame, 2, "roll_dice"),
         (MidnightGame, 2, "roll"),
         (PigGame, 2, "roll"),
