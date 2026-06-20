@@ -221,6 +221,30 @@ players.
 - Prefer writing locale keys before feature code so every announcement path is
   planned.
 
+### String Localization & Contextual Broadcasting Standard
+
+Whenever a new game is added or an existing game is modified with player-facing
+string changes, perform a complete string and broadcast-context audit.
+
+- Every actor-attributable gameplay broadcast must have distinct personal
+  first-person and public third-person forms: the actor hears "You ...", while
+  other listeners hear "<PlayerName> ...". Use `broadcast_personal_l(...)` or
+  an equivalent per-listener localized helper. Do not send the actor the same
+  third-person message as everyone else. Genuinely global events with no actor
+  may use one shared form.
+- Evaluate every message against the complete state and audience matrix,
+  including actor versus observer, player versus team, success versus failure,
+  active versus waiting/resolving state, option variants, spectators, bots,
+  reconnect/save restoration, and relevant brief-announcement variants.
+- Errors, warnings, disabled-action reasons, confirmations, and gameplay
+  notifications must identify the attempted action, the specific blocking or
+  resulting condition, and the state values needed to understand what happened
+  and what the player can do next. Avoid generic messages such as "You cannot
+  do that" when a contextual explanation is available.
+- Keep EN/VI keys and variables structurally synchronized, localize
+  listener-dependent values per recipient, and add tests for both actor and
+  observer wording plus important contextual and error branches.
+
 ## Scores, Leaderboards, and Teams
 
 - Only games with real leaderboard support should expose

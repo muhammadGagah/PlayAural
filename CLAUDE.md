@@ -466,6 +466,51 @@ Any new persistent feature must define:
 - Prefer writing the `en` strings before the game/feature code — it forces the
   flow to be planned and every announcement to be enumerated up front.
 
+#### String Localization & Contextual Broadcasting Standard (Mandatory)
+
+Whenever a new game is added or an existing game is modified with
+player-facing string changes, the implementation must include a deliberate
+audit of every affected string, announcement path, listener perspective, and
+reachable state. This is part of the feature work, not optional cleanup.
+
+**Perspective split**
+- Every actor-attributable gameplay broadcast must have distinct personal
+  first-person and public third-person forms. The actor hears a direct
+  "You ..." message; every other listener hears "<PlayerName> ...".
+- Use `broadcast_personal_l(...)` when one personal/public pair is sufficient.
+  Use an equivalent per-listener localized helper when brief announcements,
+  team names, hidden information, locale-dependent values, or other listener
+  context requires individual rendering.
+- Do not broadcast one third-person message to everyone and make the actor hear
+  their own name. Genuinely global events with no actor, such as a round start
+  or neutral environmental change, may use one shared form.
+
+**Complete contextual awareness**
+- Evaluate affected strings against the full applicable state and audience
+  matrix: actor versus observer, individual versus team, success versus
+  failure, active versus waiting/resolving state, option and ruleset variants,
+  spectators, bots, reconnect/save restoration, and full versus brief
+  announcements.
+- Include the concrete values that make the event understandable, such as the
+  action or object involved, amount gained or lost, resulting total, target,
+  remaining requirement, current phase, risk, consequence, or next available
+  step. Localize listener-dependent values separately for each recipient.
+- Do not reuse a broad string when different branches have materially
+  different causes, consequences, private information, or recovery steps.
+
+**Errors, warnings, and action feedback**
+- Every disabled-action reason, validation error, warning, confirmation, and
+  gameplay notification must identify the attempted action and the specific
+  condition that blocked or resulted from it.
+- Tell the player what state caused the outcome and, whenever useful, what must
+  change or what action is available next. Avoid generic feedback such as
+  "Invalid action", "Not allowed", or "You cannot do that" when a precise
+  situational explanation can be provided.
+- Maintain EN/VI key, variable, plural, and select-arm parity. Add regression
+  coverage for actor and observer forms, listener-specific rendering, and the
+  important success, failure, edge, and validation branches introduced or
+  changed by the work.
+
 ### Desktop Client Architecture
 - **`client/ui/main_window.py`** — primary desktop UI and gameplay interaction
 - **`client/network_manager.py`** — WebSocket client and packet dispatch
