@@ -580,6 +580,93 @@ def test_vietnamese_documentation_matches_localized_nautical_terms() -> None:
     assert "Hồi phục: 4 lượt" in doc
 
 
+def test_bot_collects_nearby_gem_instead_of_low_value_attack() -> None:
+    game, (alice, rival), _ = make_game()
+    alice.is_bot = True
+    alice.position = 10
+    rival.position = 12
+    game.gem_positions = {position: -1 for position in range(1, 41)}
+    game.gem_positions[11] = 17
+    game.total_gems = 1
+
+    assert bot_ai.bot_think(game, alice) == "move_right"
+    assert game._bot_decision.direction == "right"
+    assert game._bot_decision.target is None
+
+
+def test_bot_activates_sword_before_high_value_boarding_attack() -> None:
+    game, (alice, rival), _ = make_game()
+    alice.is_bot = True
+    alice.leveling.level = 60
+    alice.position = 10
+    rival.position = 12
+    rival.gems = [17]
+    rival.score = 3
+    game.gem_positions = {position: -1 for position in range(1, 41)}
+    game.gem_positions[30] = 0
+    game.total_gems = 1
+
+    assert bot_ai.bot_think(game, alice) == "use_skill"
+    assert game._bot_decision.skill_name == skills.SWORD_FIGHTER.skill_id
+    assert game._bot_decision.target is rival
+
+
+def test_bot_uses_double_devastation_for_out_of_range_gem_leader() -> None:
+    game, (alice, rival), _ = make_game()
+    alice.is_bot = True
+    alice.leveling.level = 200
+    alice.position = 10
+    rival.position = 18
+    rival.gems = [17, 6]
+    rival.score = 5
+    game.gem_positions = {position: -1 for position in range(1, 41)}
+    game.gem_positions[1] = 0
+    game.total_gems = 1
+
+    assert bot_ai.bot_think(game, alice) == "use_skill"
+    assert game._bot_decision.skill_name == skills.DOUBLE_DEVASTATION.skill_id
+    assert game._bot_decision.target is rival
+
+
+def test_bot_uses_random_portal_escape_when_carrying_gems_under_threat() -> None:
+    game, (alice, threat, distant), _ = make_game(player_count=3)
+    alice.is_bot = True
+    alice.leveling.level = 25
+    alice.position = 10
+    alice.add_gem(17, 3)
+    alice.add_gem(6, 2)
+    threat.position = 12
+    distant.position = 25
+    game.gem_positions = {position: -1 for position in range(1, 41)}
+    game.gem_positions[35] = 0
+    game.total_gems = 1
+
+    assert bot_ai.bot_think(game, alice) == "use_skill"
+    assert game._bot_decision.skill_name == skills.PORTAL.skill_id
+    assert game._bot_decision.portal_random
+
+    game.pending_portal_player_id = alice.id
+    assert game._bot_select_portal_ocean(alice, ["2", "random"]) == "random"
+
+
+def test_bot_boarding_steals_high_value_gems_and_pushes_away_from_treasure() -> None:
+    game, (alice, rival), _ = make_game()
+    alice.is_bot = True
+    rival.gems = [17, 6]
+    rival.score = 5
+
+    assert bot_ai.bot_select_boarding_action(game, alice, rival, True) == "steal"
+
+    rival.gems = []
+    rival.score = 0
+    rival.position = 10
+    game.gem_positions = {position: -1 for position in range(1, 41)}
+    game.gem_positions[18] = 17
+    game.total_gems = 1
+
+    assert bot_ai.bot_select_boarding_action(game, alice, rival, False) == "left"
+
+
 def test_two_bot_game_completes() -> None:
     random.seed(20260620)
     game, _, _ = make_game(bots=True)

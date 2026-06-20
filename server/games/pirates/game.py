@@ -858,6 +858,8 @@ class PiratesGame(Game):
             for ocean_id in selectable_oceans
         ]
         selected = bot_ai.bot_select_portal_ocean(self, player, options)
+        if selected == "random":
+            return "random"
         return str(selected) if selected is not None else selectable_oceans[0]
 
     def _get_portal_initial_selection(
