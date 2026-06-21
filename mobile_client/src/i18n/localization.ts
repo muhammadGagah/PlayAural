@@ -1,9 +1,11 @@
 import en from "../../locales/en/client.json";
 import vi from "../../locales/vi/client.json";
+import id from "../../locales/id/client.json";
 
 const catalogs = {
   en,
   vi,
+  id,
 };
 
 export type MobileLocale = keyof typeof catalogs;
@@ -14,6 +16,10 @@ export class MobileLocalization {
   setLocale(locale: string | undefined): void {
     if (locale === "vi") {
       this.locale = "vi";
+      return;
+    }
+    if (locale === "id") {
+      this.locale = "id";
       return;
     }
     this.locale = "en";
