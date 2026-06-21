@@ -141,7 +141,7 @@ class MainWindow(wx.Frame):
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
         # Language codes map
-        self.lang_codes = {"en": "English", "vi": "Vietnamese", "es": "Spanish"}
+        self.lang_codes = {"en": "English", "vi": "Vietnamese", "id": "Indonesian", "es": "Spanish"}
 
         # Auto-connect
         self._auto_connect()
