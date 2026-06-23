@@ -71,6 +71,8 @@ yahtzee-player-rolled = { $player } mengocok: { $dice }. { $remaining ->
        *[other] kocokan
     }.
 }
+yahtzee-you-rolled-brief = Hasil kocokan Anda: { $dice }.
+yahtzee-player-rolled-brief = { $player } mengocok: { $dice }.
 
 yahtzee-you-scored = Kamu mencetak { $points } { $points ->
     [one] poin
@@ -80,16 +82,28 @@ yahtzee-player-scored = { $player } mencetak { $points } { $points ->
     [one] poin
    *[other] poin
 } di { $category }.
+yahtzee-you-scored-brief = { $points } poin di { $category }.
+yahtzee-player-scored-brief = { $player }: { $points } poin di { $category }.
 
 yahtzee-you-bonus = Bonus Yahtzee! +100 poin
 yahtzee-player-bonus = { $player } dapat bonus Yahtzee! +100 poin
+yahtzee-you-bonus-brief = Bonus Yahtzee, +100.
+yahtzee-player-bonus-brief = { $player }: Bonus Yahtzee, +100.
 
 yahtzee-you-upper-bonus = Bonus bagian atas! +35 poin (total { $total } di bagian atas)
 yahtzee-player-upper-bonus = { $player } dapat bonus bagian atas! +35 poin
+yahtzee-you-upper-bonus-brief = Bonus atas, +35.
+yahtzee-player-upper-bonus-brief = { $player }: bonus atas, +35.
 yahtzee-you-upper-bonus-missed = Gagal dapat bonus atas. Skormu { $total }, butuh 63.
 yahtzee-player-upper-bonus-missed = { $player } tidak dapat bonus bagian atas.
+yahtzee-you-upper-bonus-missed-brief = Bonus atas tidak tercapai; kurang { $needed }.
+yahtzee-player-upper-bonus-missed-brief = { $player }: bonus atas tidak tercapai, kurang { $needed }.
 
 yahtzee-check-scoresheet = Cek papan skor
+yahtzee-check-all-scorecards = Cek papan skor untuk semua pemain
+yahtzee-select-scorecard-player = Pilih papan skor pemain.
+yahtzee-scorecard-no-players = Belum ada pemain aktif yang memiliki papan skor di permainan ini.
+yahtzee-scorecard-player-unavailable = Pemain tersebut tidak lagi dapat dilihat. Buka daftar papan skor lagi dan pilih pemain aktif.
 yahtzee-view-dice = Cek dadu
 yahtzee-your-dice = Dadumu: { $dice }.
 yahtzee-your-dice-kept = Dadumu: { $dice }. Yang disimpan: { $kept }.
@@ -123,6 +137,14 @@ yahtzee-winner = { $player } menang dengan { $score } { $score ->
     [one] poin
    *[other] poin
 }!
+yahtzee-you-win = Anda menang dengan { $score } { $score ->
+    [one] poin
+   *[other] poin
+}!
+yahtzee-player-wins = { $player } menang dengan { $score } { $score ->
+    [one] poin
+   *[other] poin
+}!
 yahtzee-winners-tie = Seri! { $players } semuanya mencetak { $score } poin!
 
 yahtzee-set-rounds = Jumlah ronde: { $rounds }
@@ -132,3 +154,5 @@ yahtzee-option-changed-rounds = Jumlah ronde diatur ke { $rounds }.
 yahtzee-no-rolls-left = Kamu tidak punya sisa kocokan.
 yahtzee-roll-first = Kamu harus mengocok dadu dulu.
 yahtzee-category-filled = Kategori itu sudah terisi.
+yahtzee-joker-upper-required = Aturan Joker: karena Yahtzee ini menunjukkan { $face }, Anda harus mengisi kotak bagian atas untuk { $face } sebelum kategori lainnya.
+yahtzee-joker-lower-required = Aturan Joker: kotak bagian atas untuk { $face } sudah terisi, sehingga Anda harus memilih kategori bagian bawah yang masih terbuka sebelum menggunakan kotak bagian atas lainnya.

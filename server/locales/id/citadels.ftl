@@ -49,6 +49,7 @@ citadels-district-thieves_den = Sarang Pencuri
 citadels-district-wishing_well = Sumur Harapan
 
 citadels-game-start = Permainan Citadels dimulai.
+citadels-selection-start-you = Ronde { $round }. Kamu memilih karakter lebih dulu.
 citadels-selection-start = Ronde { $round }. { $player } memilih karakter lebih dulu.
 citadels-selection-prompt = Pilih karakter sekarang.
 citadels-you-chose-character = Kamu telah memilih karakter.

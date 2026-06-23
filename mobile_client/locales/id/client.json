@@ -183,5 +183,20 @@
   "current-music-track": "Musik: {value}",
   "current-ambience-track": "Suasana: {value}",
   "footer-gestures-line-1": "Game ini punya gestur bawaan. Untuk pengalaman terbaik, matikan pembaca layar setelah berhasil masuk ke dalam game.",
-  "footer-gestures-line-2": "Geser 1 jari untuk pindah item. Geser 2 jari ke atas untuk kembali atau buka menu aksi. Geser 2 jari ke kanan untuk chat. Geser 2 jari ke kiri untuk riwayat. Geser 2 jari ke bawah untuk pintasan. Ketuk 2 jari untuk berhenti bicara. Ketuk 3 jari untuk mengulang pengumuman terakhir. Ketuk 3 jari tiga kali untuk ganti self-voicing."
+  "footer-gestures-line-2": "Geser 1 jari untuk pindah item. Geser 2 jari ke atas untuk kembali atau buka menu aksi. Geser 2 jari ke kanan untuk chat. Geser 2 jari ke kiri untuk riwayat. Geser 2 jari ke bawah untuk pintasan. Ketuk 2 jari untuk berhenti bicara. Ketuk 3 jari untuk mengulang pengumuman terakhir. Ketuk 3 jari tiga kali untuk ganti self-voicing.",
+  "background-service-gameplay": "Koneksi game aktif di latar belakang.",
+  "battery-optimization-title": "Izinkan Bermain di Latar Belakang",
+  "battery-optimization-message": "Izinkan PlayAural mengabaikan optimasi baterai Android agar game, voice chat, dan audio dapat terus berjalan dengan andal saat aplikasi diminimalkan.",
+  "battery-optimization-prompt-announcement": "Perintah pengaturan baterai Android dibuka.",
+  "battery-optimization-allow": "Izinkan",
+  "battery-optimization-open-settings": "Buka Pengaturan",
+  "battery-optimization-later": "Nanti Saja",
+  "battery-optimization-settings-opened": "Pengaturan optimasi baterai dibuka. Izinkan PlayAural berjalan tanpa batasan baterai.",
+  "battery-optimization-settings-unavailable": "Pengaturan optimasi baterai tidak dapat dibuka. Anda dapat mengubahnya nanti di pengaturan Android.",
+  "text-input-empty": "{label}. Kosong.",
+  "text-input-value": "{label}. {value}",
+  "text-input-readonly-empty": "{label}. Hanya-baca. Kosong.",
+  "text-input-readonly-value": "{label}. Hanya-baca. {value}",
+  "text-input-secure-empty": "{label}. Bidang aman. Kosong.",
+  "text-input-secure-count": "{label}. Bidang aman. {count} karakter."
 }

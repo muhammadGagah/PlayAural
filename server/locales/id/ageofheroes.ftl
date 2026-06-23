@@ -331,8 +331,13 @@ ageofheroes-round-draw = Hasil seri { $total }. Tidak ada pasukan yang gugur.
 ageofheroes-round-attacker-wins-brief = { $attacker } { $att_total } mengalahkan { $defender } { $def_total }. { $defender } -1 pasukan.
 ageofheroes-round-defender-wins-brief = { $defender } { $def_total } mengalahkan { $attacker } { $att_total }. { $attacker } -1 pasukan.
 ageofheroes-round-draw-brief = Seri { $total }. Tidak ada yang gugur.
+ageofheroes-you-win-battle-as-attacker = Kamu mengalahkan { $defender }.
+ageofheroes-you-lose-battle-as-defender = { $attacker } mengalahkanmu.
 ageofheroes-battle-victory-attacker = { $attacker } mengalahkan { $defender }.
+ageofheroes-you-lose-battle-as-attacker = { $defender } berhasil menahan seranganmu.
+ageofheroes-you-win-battle-as-defender = Kamu berhasil menahan serangan { $attacker }.
 ageofheroes-battle-victory-defender = { $defender } berhasil menahan serangan { $attacker }.
+ageofheroes-you-draw-battle = Kamu dan { $opponent } sama-sama kehilangan seluruh pasukan yang dikerahkan dalam pertempuran.
 ageofheroes-battle-mutual-defeat = { $attacker } dan { $defender } sama-sama kehilangan seluruh pasukan.
 ageofheroes-general-bonus = +{ $count } dari { $count ->
     [one] jenderal
@@ -384,6 +389,8 @@ ageofheroes-army-recover = Pasukan { $player } pulih dari gempa bumi.
 ageofheroes-army-recover-you = Pasukanmu pulih dari gempa bumi.
 
 # Olympics
+ageofheroes-you-cancel-war-with-olympics = Kamu memainkan Kartu Olimpiade, membatalkan perang yang dideklarasikan.
+ageofheroes-player-cancels-war-with-olympics = { $player } memainkan Kartu Olimpiade, membatalkan perang yang dideklarasikan.
 ageofheroes-olympics-cancel = { $player } menggunakan Olimpiade. Perang dibatalkan.
 ageofheroes-olympics-prompt = { $attacker } menyatakan perang. Kamu punya Olimpiade, gunakan untuk membatalkan?
 ageofheroes-yes = Ya
@@ -496,6 +503,8 @@ ageofheroes-hero-army = Pasukan
 ageofheroes-hero-general = Jenderal
 
 # Fortune card
+ageofheroes-you-use-fortune = Kamu menggunakan Kartu Keberuntungan untuk mengocok ulang dadu pertempuran.
+ageofheroes-player-uses-fortune = { $player } menggunakan Kartu Keberuntungan untuk mengocok ulang dadu pertempuran.
 ageofheroes-fortune-reroll = { $player } menggunakan Kartu Keberuntungan untuk mengocok ulang.
 ageofheroes-fortune-prompt = Lemparanmu gagal. Gunakan Kartu Keberuntungan untuk mengocok ulang?
 

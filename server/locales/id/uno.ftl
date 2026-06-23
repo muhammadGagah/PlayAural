@@ -163,7 +163,19 @@ uno-round-details-none = Tidak ada poin yang didapat dari lawan.
 uno-round-summary = { $details }. { $player } mendapatkan { $total }.
 uno-round-summary-you = { $details }. Kamu mendapatkan { $total }.
 uno-round-points = { $player } punya { $points } poin tersisa di tangan.
+uno-you-add-penalty-points = Kamu menambahkan { $points } poin penalti ke total poinmu untuk ronde ini.
+uno-player-adds-penalty-points = { $player } menambahkan { $points } poin penalti ke total poin mereka untuk ronde ini.
+uno-you-are-eliminated = Kamu telah mencapai batas eliminasi { $limit } poin dan keluar dari permainan.
+uno-player-is-eliminated = { $player } telah mencapai batas eliminasi { $limit } poin dan keluar dari permainan.
 uno-eliminated = { $player } tereliminasi!
+uno-you-win-game = { $mode ->
+        [elimination] Kamu adalah pemain terakhir yang tersisa dan menang dengan { $score } poin penalti.
+       *[first_to_limit] Kamu memenangkan permainan dengan { $score } poin!
+    }
+uno-player-wins-game = { $mode ->
+        [elimination] { $player } adalah pemain terakhir yang tersisa dan menang dengan { $score } poin penalti.
+       *[first_to_limit] { $player } memenangkan permainan dengan { $score } poin!
+    }
 uno-game-winner = { $player } memenangkan permainan dengan { $score } poin!
 uno-game-tie = Semua pemain tereliminasi. Permainan berakhir seri!
 uno-line-format = { $rank }. { $player }: { $score }

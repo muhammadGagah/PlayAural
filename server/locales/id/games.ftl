@@ -1,6 +1,8 @@
 game-round-start = Ronde { $round }.
 game-round-end = Ronde { $round } selesai.
 game-turn-start = Giliran { $player }.
+game-turn-start-you = Sekarang giliran Anda.
+game-turn-start-player = Sekarang giliran { $player }.
 game-no-turn = Belum ada giliran siapa pun.
 
 game-score-line = { $player }: { $score } { $unit }
@@ -38,6 +40,7 @@ game-score-unit-light = cahaya
 game-final-scores-header = Skor Akhir:
 
 game-winner = { $player } menang!
+game-winner-you = Anda menang!
 game-winner-score = { $player } menang dengan { $score } poin!
 game-tiebreaker = Skor imbang! Babak penentuan dimulai!
 game-tiebreaker-players = Skor imbang antara { $players }! Babak penentuan dimulai!

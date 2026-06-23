@@ -90,7 +90,11 @@ chess-draw-fivefold = Remis karena aturan wajib pengulangan lima kali.
 chess-draw-insufficient-material = Remis karena kekurangan buah untuk skakmat.
 chess-draw-agreement = Remis karena kesepakatan.
 chess-draw-timeout-insufficient = Remis. Waktu lawan habis, tapi tidak ada cukup buah untuk skakmat.
+chess-you-are-in-check = Rajamu sedang skak (check).
+chess-player-is-in-check = Raja { $player } sedang skak (check).
 chess-check = Skak terhadap { $player }.
+chess-you-lose-on-time = Waktu Anda habis. { $winner } menang karena waktu.
+chess-player-loses-on-time = Waktu { $player } habis. { $winner } menang karena waktu.
 chess-timeout-loss = Waktu { $player } habis. { $winner } menang karena waktu.
 
 chess-you-en-passant = Kamu memindahkan { $piece } dari { $from_square } ke { $to_square } dan melakukan en passant.
@@ -134,7 +138,9 @@ chess-player-declines-undo = { $player } menolak permintaan pembatalan langkah.
 chess-draw-offer-too-early = Penawaran remis hanya bisa dilakukan setelah kedua pemain melangkah minimal sekali.
 chess-claim-available-fifty-move = Remis karena aturan lima puluh langkah bisa diklaim sekarang.
 chess-claim-available-threefold = Remis karena pengulangan tiga kali bisa diklaim sekarang.
+chess-you-claim-draw-fifty-move = Kamu mengklaim remis berdasarkan aturan 50 langkah.
 chess-draw-claimed-fifty-move = { $player } mengklaim remis karena aturan lima puluh langkah.
+chess-you-claim-draw-threefold = Kamu mengklaim remis karena pengulangan posisi tiga kali (threefold repetition).
 chess-draw-claimed-threefold = { $player } mengklaim remis karena pengulangan tiga kali.
 
 chess-status-white = Putih: { $player }
