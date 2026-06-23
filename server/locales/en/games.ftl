@@ -1,6 +1,8 @@
 game-round-start = Round { $round }.
 game-round-end = Round { $round } complete.
-game-turn-start = { $player }'s turn.
+game-turn-start = It is { $player }'s turn.
+game-turn-start-you = It is your turn.
+game-turn-start-player = It is { $player }'s turn.
 game-no-turn = No one's turn right now.
 
 game-score-line = { $player }: { $score } { $unit }
@@ -38,6 +40,7 @@ game-score-unit-light = light
 game-final-scores-header = Final Scores:
 
 game-winner = { $player } wins!
+game-winner-you = You win!
 game-winner-score = { $player } wins with { $score } points!
 game-tiebreaker = It's a tie! Tiebreaker round!
 game-tiebreaker-players = It's a tie between { $players }! Tiebreaker round!
