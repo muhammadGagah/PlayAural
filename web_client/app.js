@@ -92,19 +92,20 @@ function webSpeechRateFromPreference(value) {
 function detectClientPlatform() {
   const nav = window.navigator || {};
   const userAgentDataPlatform = String(nav.userAgentData?.platform || "").trim();
+  const userAgentDataMobile = nav.userAgentData?.mobile === true;
   const platform = String(userAgentDataPlatform || nav.platform || "").trim();
   const userAgent = String(nav.userAgent || "");
   const maxTouchPoints = Number(nav.maxTouchPoints || 0);
   const probe = `${platform} ${userAgent}`.toLowerCase();
 
-  if (/android/.test(probe)) {
-    return "Android";
-  }
   if (/iphone|ipod/.test(probe)) {
     return "iOS";
   }
   if (/ipad/.test(probe) || (platform === "MacIntel" && maxTouchPoints > 1)) {
     return "iPadOS";
+  }
+  if (/android/.test(probe) || (userAgentDataMobile && /linux/.test(probe))) {
+    return "Android";
   }
   if (/windows|win32|win64|wow64/.test(probe)) {
     return "Windows";

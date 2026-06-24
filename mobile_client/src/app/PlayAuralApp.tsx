@@ -81,6 +81,8 @@ const CLIENT_SV_STORAGE_KEY = "playaural.mobile.selfVoicing";
 const CLIENT_MIC_PERMISSION_REQUESTED_STORAGE_KEY = "playaural.mobile.voiceMicPermissionRequested";
 const WEB_SCREEN_READER_SUPPORT = Platform.OS === "web";
 const NATIVE_FOCUS_DELAY_MS = 80;
+const NATIVE_FOCUS_MAX_ATTEMPTS = 8;
+const NATIVE_MENU_FOCUS_REQUEST_TTL_MS = 3000;
 const NATIVE_SCREEN_READER_ANNOUNCEMENT_MIN_DELAY_MS = 900;
 const NATIVE_SCREEN_READER_ANNOUNCEMENT_MAX_DELAY_MS = 7000;
 const NATIVE_SCREEN_READER_ANNOUNCEMENT_CHAR_MS = 45;
@@ -273,6 +275,23 @@ const MAX_SCROLLING_GRID_CELL_SIZE = 40;
 
 function isProtectedTransientMenu(menuId: string | undefined): boolean {
   return menuId !== undefined && PROTECTED_TRANSIENT_MENU_IDS.has(menuId);
+}
+
+function shouldAutoFocusUnsolicitedMenu(menuId: string, previousMenuId: string): boolean {
+  if (!previousMenuId) {
+    return true;
+  }
+  if (menuId === previousMenuId) {
+    return false;
+  }
+  return menuId !== "turn_menu";
+}
+
+function menuItemAccessibilityKey(menuId: string, item: { id?: string } | undefined, index: number): string {
+  const identity = item?.id !== undefined && item.id !== null
+    ? `id:${String(item.id)}`
+    : `text:${index}:${String((item as { text?: string } | undefined)?.text ?? "")}`;
+  return `menu:${menuId}:${identity}`;
 }
 
 function detectPreferredLocale(): "en" | "vi" {
@@ -560,6 +579,8 @@ export function PlayAuralApp() {
   const nativeFocusTargetQueuedAtRef = useRef(0);
   const nativeFocusTargetReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeScreenReaderModeRef = useRef(false);
+  const nativeMenuFocusOnNextPacketRef = useRef(false);
+  const nativeMenuFocusRequestedAtRef = useRef(0);
   const programmaticNativeFocusKeyRef = useRef<string | null>(null);
   const programmaticNativeFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeScreenReaderAnnouncementQueueRef = useRef<string[]>([]);
@@ -710,6 +731,8 @@ export function PlayAuralApp() {
       lastNativeFocusKeyRef.current = null;
       pendingNativeAccessibilityFocusKeyRef.current = null;
       nativeFocusTargetKeyRef.current = null;
+      nativeMenuFocusOnNextPacketRef.current = false;
+      nativeMenuFocusRequestedAtRef.current = 0;
       if (nativeFocusTimerRef.current) {
         clearTimeout(nativeFocusTimerRef.current);
         nativeFocusTimerRef.current = null;
@@ -810,6 +833,24 @@ export function PlayAuralApp() {
     }
     pendingNativeAccessibilityFocusKeyRef.current = key;
     pendingNativeAccessibilityFocusQueuedAtRef.current = Date.now();
+  }, []);
+
+  const requestNativeMenuFocusOnNextPacket = useCallback(() => {
+    nativeMenuFocusOnNextPacketRef.current = true;
+    nativeMenuFocusRequestedAtRef.current = Date.now();
+  }, []);
+
+  const isNativeAccessibilityFocusKeyCurrent = useCallback((key: string): boolean => {
+    if (!key.startsWith("menu:")) {
+      return true;
+    }
+    const currentMenuState = menuStateRef.current;
+    return (
+      modeRef.current === "main" &&
+      currentMenuState.items.some((item, index) =>
+        menuItemAccessibilityKey(currentMenuState.menuId, item, index) === key,
+      )
+    );
   }, []);
 
   const markNativeScreenReaderInteraction = useCallback((focusKey?: string | null) => {
@@ -915,6 +956,10 @@ export function PlayAuralApp() {
     if (!nativeScreenReaderMode || !key) {
       return;
     }
+    if (!isNativeAccessibilityFocusKeyCurrent(key)) {
+      clearScheduledNativeFocus(key);
+      return;
+    }
     if (!options.force && lastNativeFocusKeyRef.current === key) {
       return;
     }
@@ -932,7 +977,7 @@ export function PlayAuralApp() {
 
     const node = accessibilityNodeRefs.current.get(key);
     if (!node) {
-      if (attempt < 4) {
+      if (attempt < NATIVE_FOCUS_MAX_ATTEMPTS) {
         if (nativeFocusTimerRef.current) {
           clearTimeout(nativeFocusTimerRef.current);
         }
@@ -952,6 +997,18 @@ export function PlayAuralApp() {
 
     nativeFocusTimerRef.current = setTimeout(() => {
       nativeFocusTimerRef.current = null;
+      if (!isNativeAccessibilityFocusKeyCurrent(key)) {
+        clearScheduledNativeFocus(key);
+        return;
+      }
+      if (accessibilityNodeRefs.current.get(key) !== node) {
+        if (attempt < NATIVE_FOCUS_MAX_ATTEMPTS) {
+          moveNativeAccessibilityFocus(key, attempt + 1, options);
+        } else {
+          clearScheduledNativeFocus(key);
+        }
+        return;
+      }
       lastNativeFocusKeyRef.current = key;
       if (Platform.OS === "web") {
         const focusable = node as { focus?: () => void };
@@ -973,7 +1030,7 @@ export function PlayAuralApp() {
         AccessibilityInfo.setAccessibilityFocus(reactTag);
       }
     }, NATIVE_FOCUS_DELAY_MS);
-  }, [clearScheduledNativeFocus, nativeScreenReaderMode]);
+  }, [clearScheduledNativeFocus, isNativeAccessibilityFocusKeyCurrent, nativeScreenReaderMode]);
 
   const focusChatInputForNativeReader = useCallback(() => {
     if (!nativeScreenReaderMode) {
@@ -1623,6 +1680,9 @@ export function PlayAuralApp() {
         return previous;
       }
       transientTurnMenuAllowanceRef.current = null;
+      nativeMenuFocusOnNextPacketRef.current = false;
+      nativeMenuFocusRequestedAtRef.current = 0;
+      clearScheduledNativeFocus();
       menuStateRef.current = defaultMenuState;
       return defaultMenuState;
     });
@@ -1654,6 +1714,9 @@ export function PlayAuralApp() {
 
     if (packet.menu_id && packet.menu_id === previous.menuId && items.length === 0) {
       transientTurnMenuAllowanceRef.current = null;
+      nativeMenuFocusOnNextPacketRef.current = false;
+      nativeMenuFocusRequestedAtRef.current = 0;
+      clearScheduledNativeFocus();
       menuStateRef.current = defaultMenuState;
       setMenuState(defaultMenuState);
       return;
@@ -1678,7 +1741,11 @@ export function PlayAuralApp() {
     }
 
     const isSameMenuId = previous.menuId === (packet.menu_id ?? previous.menuId);
-    const serverRequestedFocus = typeof packet.position === "number" || typeof packet.selection_id === "string";
+    const directMenuActionRequestedFocus =
+      nativeMenuFocusOnNextPacketRef.current &&
+      Date.now() - nativeMenuFocusRequestedAtRef.current <= NATIVE_MENU_FOCUS_REQUEST_TTL_MS;
+    nativeMenuFocusOnNextPacketRef.current = false;
+    nativeMenuFocusRequestedAtRef.current = 0;
     let position = typeof packet.position === "number" ? packet.position : null;
 
     if (packet.selection_id && position === null) {
@@ -1731,9 +1798,18 @@ export function PlayAuralApp() {
       nativeScreenReaderModeRef.current &&
       modeRef.current === "main" &&
       items.length > 0 &&
-      (serverRequestedFocus || !isSameMenuId);
+      (
+        directMenuActionRequestedFocus ||
+        shouldAutoFocusUnsolicitedMenu(nextMenuState.menuId, previous.menuId)
+      );
     if (shouldFocusNativeMenu) {
-      queueNativeAccessibilityFocus(`menu:${nextMenuState.menuId}:${nextMenuState.focusIndex}`);
+      queueNativeAccessibilityFocus(
+        menuItemAccessibilityKey(
+          nextMenuState.menuId,
+          nextMenuState.items[nextMenuState.focusIndex],
+          nextMenuState.focusIndex,
+        ),
+      );
     }
 
     menuStateRef.current = nextMenuState;
@@ -1968,6 +2044,9 @@ export function PlayAuralApp() {
     activeTextInputKeyRef.current = null;
     inputStateRef.current = null;
     transientTurnMenuAllowanceRef.current = null;
+    nativeMenuFocusOnNextPacketRef.current = false;
+    nativeMenuFocusRequestedAtRef.current = 0;
+    clearScheduledNativeFocus();
     setActiveTextInputKey(null);
     setCurrentMusic("");
     setCurrentAmbience("");
@@ -1979,6 +2058,7 @@ export function PlayAuralApp() {
     });
     resetVoiceUiState();
     setConnected(false);
+    modeRef.current = "main";
     setMode("main");
     setMenuState(defaultMenuState);
     menuStateRef.current = defaultMenuState;
@@ -1989,7 +2069,7 @@ export function PlayAuralApp() {
     setAuthMode("login");
     setStatusText(statusMessage);
     setAuthStatusText(authMessage);
-  }, [audio, resetVoiceUiState, voice]);
+  }, [audio, clearScheduledNativeFocus, resetVoiceUiState, voice]);
 
   const handleTerminalSessionExit = useCallback((message: string, announceMessage = true) => {
     disableAutoReconnect();
@@ -2145,6 +2225,7 @@ export function PlayAuralApp() {
             url: String(authPacket.voice?.url || ""),
           });
           resetVoiceUiState();
+          requestNativeMenuFocusOnNextPacket();
           setConnected(true);
           setAuthMode("login");
           setAuthStatusText("");
@@ -2174,6 +2255,9 @@ export function PlayAuralApp() {
           activeTextInputKeyRef.current = null;
           setActiveTextInputKey(null);
           transientTurnMenuAllowanceRef.current = null;
+          nativeMenuFocusOnNextPacketRef.current = false;
+          nativeMenuFocusRequestedAtRef.current = 0;
+          clearScheduledNativeFocus();
           setMenuState(defaultMenuState);
           menuStateRef.current = defaultMenuState;
           setInputState(null);
@@ -2295,6 +2379,9 @@ export function PlayAuralApp() {
 
         if (packet.type === "request_input") {
           const inputPacket = packet as RequestInputPacket;
+          nativeMenuFocusOnNextPacketRef.current = false;
+          nativeMenuFocusRequestedAtRef.current = 0;
+          clearScheduledNativeFocus();
           setInputState({
             defaultValue: inputPacket.default_value || "",
             inputId: inputPacket.input_id,
@@ -2987,7 +3074,10 @@ export function PlayAuralApp() {
     historyIndex,
     inputOverlayFocus,
     inputState,
+    focusedMenuItem?.id,
+    focusedMenuItem?.text,
     menuState.focusIndex,
+    menuState.items.length,
     menuState.menuId,
     mode,
     moveNativeAccessibilityFocus,
@@ -3148,6 +3238,7 @@ export function PlayAuralApp() {
     if (isProtectedTransientMenu(currentMenuState.menuId)) {
       transientTurnMenuAllowanceRef.current = currentMenuState.menuId;
     }
+    requestNativeMenuFocusOnNextPacket();
     connection?.send({
       menu_id: currentMenuState.menuId || undefined,
       selection: (indexOverride ?? currentMenuState.focusIndex) + 1,
@@ -3161,6 +3252,7 @@ export function PlayAuralApp() {
     if (isProtectedTransientMenu(currentMenuState.menuId)) {
       transientTurnMenuAllowanceRef.current = currentMenuState.menuId;
     }
+    requestNativeMenuFocusOnNextPacket();
     connection?.send({
       menu_id: currentMenuState.menuId || undefined,
       type: "escape",
@@ -3179,6 +3271,7 @@ export function PlayAuralApp() {
       const lastIndex = items.length - 1;
       if (lastIndex >= 0) {
         const item = items[lastIndex];
+        requestNativeMenuFocusOnNextPacket();
         connection?.send({
           menu_id: menuId || undefined,
           selection: lastIndex + 1,
@@ -3192,6 +3285,7 @@ export function PlayAuralApp() {
     if (escapeBehavior === "select_first_option") {
       if (items.length > 0) {
         const item = items[0];
+        requestNativeMenuFocusOnNextPacket();
         connection?.send({
           menu_id: menuId || undefined,
           selection: 1,
@@ -3207,6 +3301,7 @@ export function PlayAuralApp() {
 
   const openActionsMenu = () => {
     const currentMenuState = menuStateRef.current;
+    requestNativeMenuFocusOnNextPacket();
     connection?.send({
       menu_id: currentMenuState.menuId || "turn_menu",
       selection: 1,
@@ -3218,6 +3313,7 @@ export function PlayAuralApp() {
   const sendShiftEnter = (itemOverride?: FocusableMenuItem | null) => {
     const currentMenuState = menuStateRef.current;
     const item = itemOverride ?? currentMenuState.items[currentMenuState.focusIndex];
+    requestNativeMenuFocusOnNextPacket();
     connection?.send({
       key: "shift+enter",
       menu_item_id: item?.id ?? null,
@@ -3271,6 +3367,7 @@ export function PlayAuralApp() {
       return false;
     }
     const name = localization.t(`mode-${mode}`);
+    modeRef.current = "main";
     setMode("main");
     announceInterfaceFeedback(localization.t("overlay-closed", { name }));
     return true;
@@ -3279,6 +3376,7 @@ export function PlayAuralApp() {
   const toggleOverlay = (nextMode: Exclude<AppMode, "main">) => {
     setMode((current) => {
       const resolved = current === nextMode ? "main" : nextMode;
+      modeRef.current = resolved;
       const key = resolved === "main" ? "overlay-closed" : "overlay-opened";
       if (resolved === "shortcuts") {
         setShortcutFocusIndex(0);
@@ -3301,9 +3399,10 @@ export function PlayAuralApp() {
 
     if (nextMode === "main") {
       const previousMode = mode;
+      modeRef.current = "main";
       setMode("main");
       moveNativeAccessibilityFocus(
-        focusedMenuItem ? `menu:${menuState.menuId}:${menuState.focusIndex}` : null,
+        focusedMenuItem ? menuItemAccessibilityKey(menuState.menuId, focusedMenuItem, menuState.focusIndex) : null,
         0,
         { force: true },
       );
@@ -3326,6 +3425,7 @@ export function PlayAuralApp() {
       moveNativeAccessibilityFocus("history:content", 0, { force: true });
     }
 
+    modeRef.current = nextMode;
     setMode(nextMode);
     announceForNativeScreenReader(localization.t("overlay-opened", { name: localization.t(`mode-${nextMode}`) }));
   };
@@ -3346,11 +3446,15 @@ export function PlayAuralApp() {
       return;
     }
     if (shortcut.id === "options") {
+      requestNativeMenuFocusOnNextPacket();
+      modeRef.current = "main";
       connection?.send({ type: "open_options" });
       setMode("main");
       return;
     }
     if (shortcut.id === "friends") {
+      requestNativeMenuFocusOnNextPacket();
+      modeRef.current = "main";
       connection?.send({ type: "open_friends_hub" });
       setMode("main");
       return;
@@ -3361,11 +3465,15 @@ export function PlayAuralApp() {
       return;
     }
     if (shortcut.id === "list_online") {
+      requestNativeMenuFocusOnNextPacket();
+      modeRef.current = "main";
       connection?.send({ type: "list_online" });
       setMode("main");
       return;
     }
     if (shortcut.id === "list_online_with_games") {
+      requestNativeMenuFocusOnNextPacket();
+      modeRef.current = "main";
       connection?.send({ type: "list_online_with_games" });
       setMode("main");
       return;
@@ -3407,7 +3515,9 @@ export function PlayAuralApp() {
   const focusMenuItemAt = (index: number) => {
     setMenuState((previous) => {
       const nextIndex = clamp(index, 0, Math.max(0, previous.items.length - 1));
-      markNativeScreenReaderInteraction(`menu:${previous.menuId}:${nextIndex}`);
+      markNativeScreenReaderInteraction(
+        menuItemAccessibilityKey(previous.menuId, previous.items[nextIndex], nextIndex),
+      );
       if (previous.focusIndex === nextIndex) {
         return previous;
       }
@@ -4384,7 +4494,7 @@ export function PlayAuralApp() {
       onPress={() => {
         handleMenuItemPress(item, index);
       }}
-      ref={registerAccessibilityNode(`menu:${menuState.menuId}:${index}`)}
+      ref={registerAccessibilityNode(menuItemAccessibilityKey(menuState.menuId, item, index))}
       style={[
         styles.gridMenuItem,
         index === menuState.focusIndex ? styles.gridMenuItemFocused : undefined,
@@ -4531,7 +4641,7 @@ export function PlayAuralApp() {
               onPress={() => {
                 handleMenuItemPress(item, index);
               }}
-              ref={registerAccessibilityNode(`menu:${menuState.menuId}:${index}`)}
+              ref={registerAccessibilityNode(menuItemAccessibilityKey(menuState.menuId, item, index))}
               style={[
                 styles.menuItem,
                 index === menuState.focusIndex ? styles.menuItemFocused : undefined,
