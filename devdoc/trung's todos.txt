@@ -8,10 +8,10 @@ optimize voice chat
 playlist system parity with the desktop client
 
 web client:
-complete optimization of the web client
-add full keyboard support
-feature parity with the desktop client as closely as possible
-further optimization for iOS users
+[x] complete optimization of the web client
+[x] add full keyboard support
+[x] feature parity with the desktop client as closely as possible
+[x] further optimization for iOS users
 
 server:
 chat: allow users to toggle default chat channel between local and global (so you don't need to type /g)
