@@ -5348,12 +5348,47 @@ PlayAural Server
                 raw = value.value if hasattr(value, "value") else value
                 self._sync_pref_to_client(user, meta.sync_key, raw)
 
-    def _speak_pref_description(self, user: NetworkUser, menu_item_id: str) -> bool:
-        """Speak a preference's description when space is pressed in a pref menu."""
-        if menu_item_id.startswith("pref_") and not menu_item_id.startswith("pref_reset"):
-            field_name = menu_item_id[5:]
-        else:
-            field_name = self._user_states.get(user.username, {}).get("pref_field")
+    def _pref_field_for_description_row(
+        self,
+        user: NetworkUser,
+        current_menu: str | None,
+        menu_item_id: str,
+    ) -> str | None:
+        """Return the preference field explicitly bound to a describable row."""
+        if not current_menu or not menu_item_id:
+            return None
+        menu_state = self._current_menu_state(user, current_menu)
+        if not menu_state or menu_item_id not in self._menu_item_ids(menu_state):
+            return None
+
+        state = self._user_states.get(user.username, {})
+        if current_menu == "pref_category_menu":
+            if (
+                not menu_item_id.startswith("pref_")
+                or menu_item_id.startswith("pref_reset")
+            ):
+                return None
+            return menu_item_id[5:]
+        if current_menu == "pref_detail_menu":
+            if menu_item_id == "detail_global" or menu_item_id.startswith(
+                "detail_game_"
+            ):
+                field_name = state.get("pref_field")
+                return field_name if isinstance(field_name, str) else None
+        return None
+
+    def _speak_pref_description(
+        self,
+        user: NetworkUser,
+        current_menu: str | None,
+        menu_item_id: str,
+    ) -> bool:
+        """Speak a preference description only for rows explicitly bound to it."""
+        field_name = self._pref_field_for_description_row(
+            user,
+            current_menu,
+            menu_item_id,
+        )
         if not field_name:
             return False
         meta = UserPreferences.get_pref_meta(field_name)
@@ -8483,8 +8518,12 @@ PlayAural Server
         if user and current_menu in ("pref_category_menu", "pref_detail_menu"):
             key = (packet.get("key") or "").lower()
             menu_item_id = packet.get("menu_item_id")
-            if key == "space" and menu_item_id and self._speak_pref_description(
-                user, menu_item_id
+            packet_menu = packet.get("menu_id")
+            if (
+                key == "space"
+                and menu_item_id
+                and (not packet_menu or packet_menu == current_menu)
+                and self._speak_pref_description(user, current_menu, menu_item_id)
             ):
                 return
 

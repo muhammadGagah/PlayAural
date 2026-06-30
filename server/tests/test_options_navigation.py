@@ -753,6 +753,72 @@ async def test_space_speaks_pref_description(tmp_path) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
+async def test_space_speaks_pref_detail_description_only_on_pref_rows(tmp_path) -> None:
+    server, user = _make_server(tmp_path)
+    try:
+        server._show_pref_detail_menu(user, "brief_announcements")
+        assert _current_menu(server, user.username) == "pref_detail_menu"
+
+        spoken_before = len(user.get_spoken_messages())
+        await server._handle_keybind(
+            SimpleNamespace(username=user.username),
+            {
+                "type": "keybind",
+                "key": "space",
+                "menu_id": "pref_detail_menu",
+                "menu_item_id": "detail_global",
+            },
+        )
+        spoken = user.get_spoken_messages()
+        assert len(spoken) == spoken_before + 1
+        assert "shorten" in spoken[-1].lower()
+
+        await server._handle_keybind(
+            SimpleNamespace(username=user.username),
+            {
+                "type": "keybind",
+                "key": "space",
+                "menu_id": "pref_detail_menu",
+                "menu_item_id": "back",
+            },
+        )
+        assert user.get_spoken_messages() == spoken
+    finally:
+        server._db.close()
+
+
+@pytest.mark.asyncio
+async def test_space_ignores_stale_or_wrong_pref_description_ids(tmp_path) -> None:
+    server, user = _make_server(tmp_path)
+    try:
+        server._show_pref_detail_menu(user, "brief_announcements")
+        assert _current_menu(server, user.username) == "pref_detail_menu"
+
+        spoken_before = list(user.get_spoken_messages())
+        await server._handle_keybind(
+            SimpleNamespace(username=user.username),
+            {
+                "type": "keybind",
+                "key": "space",
+                "menu_id": "pref_detail_menu",
+                "menu_item_id": "pref_confirm_destructive_actions",
+            },
+        )
+        await server._handle_keybind(
+            SimpleNamespace(username=user.username),
+            {
+                "type": "keybind",
+                "key": "space",
+                "menu_id": "pref_category_menu",
+                "menu_item_id": "detail_global",
+            },
+        )
+        assert user.get_spoken_messages() == spoken_before
+    finally:
+        server._db.close()
+
+
+@pytest.mark.asyncio
 async def test_restore_frame_audio_submenu(tmp_path) -> None:
     server, user = _make_server(tmp_path)
     try:
